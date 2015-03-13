@@ -1,0 +1,48 @@
+doctype html
+html(ng-app="broadspotApp")
+	head
+		meta(name="viewport" content="width=device-width, initial-scale=1")
+		title="Join a Party"
+		link(href="../css/bootstrap.min.css" rel="stylesheet")
+		link(href="../css/party.css" rel="stylesheet")
+		script(src="../js/jquery.min.js")
+		script(src="../js/angular.min.js")
+		script(src="../js/bootstrap.min.js")
+		script(src="../js/app.js")
+		script(src="../js/internal.js")
+
+	body(ng-controller="PartyCtrl")
+		nav(class="navbar navbar-default")
+			div(class="container-fluid")
+				div(class="navbar-header")
+					button(type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1")
+					span(class="sr-only") Toggle Navigation
+
+				div(class="collapse navbar-collapse" id="bs-example-navbar-collapse-1")
+					ul(class="nav navbar-left")
+						li(id="partyCode").
+							Party Code: {{party.id}}
+					ul(class="nav navbar-right")
+						li
+							form(class="navbar-form")
+								div(class="form-group")
+									input(type="text" class="form-control" id="search" placeholder="Search...")
+								button(class="btn btn-default" ng-click="search()") Search
+
+		ul(class="list-group")
+			div(class="searchResults container")
+				li(ng-repeat="result in results" class="list-group-item center-block")
+					div(class="container center-block row_wrap")
+						div(class="row result")
+							div(class="col-xs-12 center-block")
+								div(class="col-xs-3")
+									img(ng-src="{{result.img}}")
+								div(class="col-xs-6")
+									div(class="row") 
+										div(class="col-xs-12" id="resultTitle") {{result.title}}
+									div(class="row")
+										div(class="col-xs-6") {{result.artist}}
+										div(class="col-xs-6") {{result.album}}
+								div(class="col-xs-3")
+									button(class="btn btn-default" ng-click="queue($event, result)")
+										span(class="glyphicon glyphicon-plus" aria-hidden="true")
