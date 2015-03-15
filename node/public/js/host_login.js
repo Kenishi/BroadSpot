@@ -1,34 +1,20 @@
 function login() {
-	var pass = document.getElementById("logintxt").value;
-	var hash = CryptoJS.SHA1(pass);
-
-	pass = "";
-	document.getElementById("logintxt").value = pass;
-	$("#loginbtn").toggleClass("disabled");
-
-	var hashpass = hash.toString(CryptoJS.enc.Hex);
-
 	$.ajax({
-		url: '/host',
+		url: '/host/auth',
 		method: 'post',
 		data : {
 			pass : hashpass
 		},
-		dataType: 'json',
-		error : function(data, status) {
-			if(status != 'error') return;
-
-			$("#loginbtn").toggleClass("disabled");
-			$("#login-form").toggleClass("has-error");
-			try {
-				$("#logintxt").attr('placeholder', data.responseJSON.msg);
-			} catch(e){}
-			document.getElementById("logintxt").oninput = function() {
-				$("#login-form").toggleClass("has-error");
-				$("#logintxt").attr('placeholder', "Default pass: 'hostpass123'");
-				document.getElementById("logintxt").oninput = null;
-			};
-		}
+		dataType: 'json'
+	})
+	.done(function(data) {
+		var url = data.url;
+		console.log("Auth url: " + url);
+		window.location(url);
+	})
+	.fail(function(data, status) {
+		console.log("Error: " + status);
+		console.log(data);
 	});
 }
 

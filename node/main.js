@@ -1,36 +1,33 @@
-var fs = require('fs');
-var express = require('express');
-var bodyParser = require('body-parser');
-var crypto = require('crypto');
-var rest = require('rest');
-var mime = require('rest/interceptor/mime');
-var cookieParser = require('cookie-parser')
+var fs = require('fs'),
+	crypto = require('crypto'),
+
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	rest = require('rest'),
+	mime = require('rest/interceptor/mime'),
+	cookieParser = require('cookie-parser');
+	//cookieSession = require('cookie-sessions');
+	//spotify = require('./spotify');
 
 var app = express();
+var server = require('http').createServer(app);
+var io = require('io')(server);
+var PORT = proc.env.PORT || 3000;
 
-var default_hashpass = "62c8093827c69d4b33df2b1b1786db4065403ee1"; // 'hostpass123'
+var CLIENT_ID = "thisismyclientidhere";
+var CLIENT_SECRET = "DHSH796hsF!f49hg9439";
 
+var HOSTNAME = "localhost";
+var REDIRECT_URL = "http://" + HOSTNAME + "/host/auth";
 var MAX_RESULTS = 30;
 
 var session = {
-	sid_seed : new Date(),
-
-	getSid : function(hashpass) {
-		var combo = hashpass + session.sid_seed;
+	getState : function() {
+		var combo = "GE(&gh3ldf" + new Date();
 		var hasher = crypto.createHash('sha1');
 		hasher.update(combo);
 		var sid = hasher.digest('hex');
 		return sid;	
-	},
-
-	checkSid : function(sid) {
-		if(fs.existsSync('hostpass')) {
-			var hashpass = fs.readFileSync('hostpass');
-			var fileSid = this.getSid(hashpass);
-			if(sid == fileSid) return true;
-			else return false;
-		}
-		return null;
 	},
 	/* Is user in the banned list? */
 	isBanned : function(ip) {
@@ -147,10 +144,12 @@ var session = {
 	getUserId : function() {
 		return this.userId;
 	},
+	state : getState(),
 	playlistId : null,
 	userId : null,
 	list : [],
 	banned : [],
+	tokens : null,
 	//partyCode : null
 	partyCode : 12345
 };
@@ -163,7 +162,7 @@ app.set('view engine', 'jade');
 app.use(express.static(__dirname + "/public"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser());
+//app.use(cookieParser());
 
 /*
 	Index page
@@ -300,217 +299,138 @@ app.get('/berror', function(req, res) {
 
 /* REST endpoint for the host's page. */
 app.get('/host', function(req, res) {
-	var sid = getSidFromReq(req);
-	// Check if we can move to the host_control page
-	if(sid != null) {
-		if(session.checkSid(sid)) {
-			res.render('host_control');
-			return;
-		}
-	}
-
-	// If there is no SID or the sid is invalid show login
-	var err = req.query.err == undefined ? 0 : req.query.err;
-	res.render('host_login', {hostError : err});
-});
-
-/* 
-
-	Rest endpoint for authenticating 
+	var err = res.query.err != undefined ? res.query.err : 0;
 	
-	Expected params:
-		pass : hashedPass
-
-	On SUCCESS returns:
-		{ 
-			code : 200,
-			sid : Hex string
-		}
-
-	On ERROR returns:
-		{
-			code : 400,
-			msg : string error message
-		}
-		OR
-		{
-			code : 404,
-			msg : string message indicating the hostpass file wouldn't be found on the server
-		}
-*/
-app.post('/host', function(req, res) {
-	var hashpass = req.body.pass;
-	fs.exists('hostpass', function(exists) {
-		// If the hostpass file exists, check against it
-		if(exists) {
-			fs.readFile('hostpass', function(err, data) {
-				if(hashpass == data) {
-					// Pass matches, generate a simple session id
-					var sid = session.getSid(hashpass);
-					res.cookie('sid', sid); // Store in cookie
-					res.redirect(200,'/host'); // Now that user has a sid, reload
-				}
-				else {
-					var out = errors.INVALID_HOST_PASSWORD;
-					res.status(out.code).send(JSON.stringify(out));
-				}
-			});
-		}
-		else { // No hostpass file found, create default
-			fs.writeFile('hostpass', default_hashpass, function() {
-				var out = errors.HOST_PASS_NOT_FOUND
-				res.status(out.code).send(JSON.stringify(out));
-			});
-		}
-	})
-});
-
-/*
-	Ban the IP
-
-	Expects:
-		id - party code (does nothing at the moment)
-		sid - session id for host 
-		ip - ip to ban
-
-	On Completion:
-		code : 200
-*/
-app.put('/host/ban/:id/:ip', function(req, res) {
-	var partyCode = req.params.id;
-	var ip = req.params.ip;
-	var sid = getSidFromReq(req);
-
-	if(validSessionId(sid, res)) {
-		res.redirect(out.code,'/host?err=1');
+	if(session.tokens == null) {
+		res.render('host_login', {hostError : err});
+	}
+	else {
+		res.render('host_control');
 	}
 });
 
+app.get('/host/auth', function(req, res) {
+	var code = req.query.code;
+	var state = req.query.state;
+	if(state != session.state) {
+		res.redirect(401, '/host?err=1');
+	}
+	else {
+		spotify.getTokens(code, REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, function(success, data) {
+			if(success) {
+				var tokens = {
+					access_token : data.access_token,
+					refresh_token : data.refresh_token,
+					expires_in : expires_in,
+					expires_at : data.expires_at
+				}
+				session.tokens = tokens;
+				res.redirect(200, '/host');
+			}
+			else {
+				res.redirect(401, '/host?err=1');
+			}
+		});
+	}
+});
+
+app.post('/host/auth', function(req, res) {
+	var opts = {
+		state : session.state,
+		scopes : [
+			spotify.SCOPES.PLAYLIST_READ_PRIVATE,
+			spotify.SCOPES.PLAYLIST_MODIFY_PUBLIC,
+			spotify.SCOPES.PLAYLIST_MODIFY_PRIVATE
+		],
+		show_dialog: true
+	};
+
+	var url = spotify.authorizeURL(CLIENT_ID, REDIRECT_URL, opts);
+	var data = { url : url };
+	res.status(200).send(JSON.stringify(data));
+});
+
 /*
-	UnBan the IP
+	Host Socket.io setup
 
 	Expects:
-		IP
-
-	On Completion:
-		code : 200
+		hash - hashed pass in HEX
 */
-app.put('/host/unban/:id/:ip', function(req, res) {
-	var partyCode = req.params.id;
-	var ip = req.params.ip;
-	var sid = getSidFromReq(req);
+io.use(function(socket, next) {	
+	if(session.tokens != null) {
+		console.log("Host Authenticated");
+		next();
+	}
+	else {
+		next(new Error("Host Not Authenticated"));
+	}
+});
 
-	if(validSessionId(sid, res)) {
+io.on('connection', function(socket) {
+	socket.on('ban', function(data) {
+		var id = data.id; 
+		var ip = data.ip;
+
+		session.banUser(ip);
+	});
+
+	socket.on('unban', function(data) {
+		var id = data.id;
+		var ip = data.ip;
+
 		session.unBanUser(ip);
-		var out = {
-			code : 200
-		};
-		res.status(out.code).send(JSON.stringify(out));
-	}
-});
+	});
 
-/* 
-	Rest endpoint for changing the party code
-	
-	On SUCCESS returns:
-		{
-			code : 200,
-			partyCode : new code for the party
+	socket.on('getBanList', function(data) {
+		var list = [];
+		for(var i=0; i < session.banned.length; i++) {
+			if(session.banned[i] != undefined) {
+				list.push(session.banned[i].ip);
+			}
 		}
-	On ERROR returns:
-		{
-			code : 400,
-			msg : a string error message
-		}
-*/
-app.move('/host', function(req, res) {
-	var sid = getSidFromReq(req);
-	
-	if(validSessionId(sid, res)) {
-		var newCode = session.newPartyCode();
-		session.partyCode = newCode;
+		socket.emit('updateBanList', JSON.stringify(list));
+	});
 
-		var out = {
-			code : 200,
-			partycode : newCode
-		};
-		res.status(out.code).send(JSON.stringify(out));
-	}
-});
+	socket.on('changeCode', function(data) {
+		var code = session.newPartyCode();
+		session.partyCode = code;
 
-/* 
-	Rest endpoint for updating the host pass
+		var out = { code : code };
+		socket.emit('updateCode', JSON.stringify(out));
+	});
 
-	Expects:
-		pass - the new pass
- */
-app.patch('/host', function(req, res) {
-	var sid = getSidFromReq(req);
-	var newPass = req.body.pass;
+	socket.on('removeSong', function(data) {
+		var token = data.token;
+		var trackId = data.trackId;
+		var listId = data.playlistId;
 
-	if(typeof newPass == undefined) {
-		var out = errors.INVALID_PARAMETERS;
-		res.status(out.code).send(JSON.stringify(out));
-		return;
-	}
+		// Oo remove
+	});
+	socket.on('getPlayLists', function(data) {
+		var token = data.token;
 
-	if(!validSessionId(sid, res)) return;
-	
-	// Get hash
-	var hasher = crypto.createHash('sha1');
-	hasher.update(pass);
-	var hashPass = hasher.digest('hex');
-	
-	// Clean up plain text pass
-	pass = "";
-	delete pass;
+		// Request playlists of use
+		// Emit list names
+	});
+	socket.on('addPlaylist', function(data) {
+		var token = data.token;
+		var listId = data.playlistId;
 
-	// Write to password file
-	file = fs.open('hostpass', 'w');
-	fs.write(file, hashPass, function() {
-		var sid = getSid(hashPass); // Pass changed so old sid is no longer valid
-		res.cookie('sid', sid);
-
-		var out = {
-			code : 200,
-			msg : "Password changed"
-		};
-		res.status(out.code).send(JSON.stringify(out));
+		// Fetch play list
+		// Loop adding to current party list
+		// Emit updatePlaylist w/ new list
+	});
+	socket.on('disconnect', function(data) {
+		// Clear session
 	});
 });
-
-app.delete('/host', function(req, res) {
-
-});
-
-function validSessionId(sid, res) {
-	if(typeof sid == undefined || !session.checkSid(sid)) {
-		res.redirect(out.code, '/host?err=1');
-		return false;
-	}
-	return true;
-}
-
-function getSidFromReq(req) {
-	var sid = null;
-	try {
-		sid = req.cookies.sid;
-	} catch(e) {
-		sid = null;
-	}
-	return sid;
-}
 
 function doQueue(id, trackId, lastQueue) {
 	console.log(id + ":" + trackId + ":: Added to queue");
 }
 
 errors = {
-	INVALID_HOST_PASSWORD : { code : 400, msg : "Invalid Password" },
-	INVALID_SESSION_ID : { code: 400, msg : "Invalid Session ID or Session expired" },
-	INVALID_PARAMETERS : { code : 400, msg : "Invalid paramters supplied" },
-	HOST_PASS_NOT_FOUND : { code : 404, msg : "Hostpass not found, use default login 'hostpass123' and then change the pass" }
+	INVALID_PARAMETERS : { code : 400, msg : "Invalid paramters supplied" }
 }
 
-
-app.listen(process.env.PORT || 3000);
+app.listen(PORT);
