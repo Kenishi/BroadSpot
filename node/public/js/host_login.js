@@ -2,15 +2,12 @@ function login() {
 	$.ajax({
 		url: '/host/auth',
 		method: 'post',
-		data : {
-			pass : hashpass
-		},
 		dataType: 'json'
 	})
 	.done(function(data) {
 		var url = data.url;
 		console.log("Auth url: " + url);
-		window.location(url);
+		window.location.href = url;
 	})
 	.fail(function(data, status) {
 		console.log("Error: " + status);

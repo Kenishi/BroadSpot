@@ -9,7 +9,8 @@ module.exports = {
 	SCOPES : {
 		PLAYLIST_READ_PRIVATE : "playlist-read-private",
 		PLAYLIST_MODIFY_PUBLIC : "playlist-modify-public",
-		PLAYLIST_MODIFY_PRIVATE : "playlist-modify-private"
+		PLAYLIST_MODIFY_PRIVATE : "playlist-modify-private",
+		USER_READ_PRIVATE : "user-read-private"
 	},
 
 	/*
@@ -47,7 +48,7 @@ module.exports = {
 						.replace("{state}", state)
 						.replace("{scope}", scopes)
 						.replace("{showdialog}", show_dialog);
-		return authorize_url.domain + path;
+		return "//" + authorize_url.domain + path;
 	},
 
 	/*
@@ -162,8 +163,70 @@ module.exports = {
 
 		req.write(body_str);
 		req.end();
-	}
+	},
+	/*
+		Retrieve a user's info.
+
+		Requires Scope: USER_READ_PRIVATE
+
+		Expects:
+			token - the token object returned from a getTokens() call
+			callback - the callback to receive the user info in.
+
+		On Success:
+			Status is set to true and an object with the user info is supplied.
+			See URL for object keys: 
+				https://developer.spotify.com/web-api/get-current-users-profile/
+		On Error:
+			Status is set to false and an error message is supplied.
+		
+		On Expired Tokens:
+			If the access token has expires, status will be set to false and
+			spotify.TokenExpireError will be in the data.
+
+			A call to refreshTokens() will need to be done before queryUserInfo
+			can proceed.
+	*/
+	queryUserInfo : function(tokens, callback) {
+		if(!tokens) throw new Error("tokens required to get user id");
+		if(!tokens.access_token) throw new Error("access token required to get user id");
+		if(!callback && typeof callback != 'function') throw new Error("callback is required to get user id");
+
+		var valid = (Date.now() - tokens.expires_at) < 0;
+		if(!valid) {
+			callback(false, this.TokenExpiredError);
+		}
+		else {
+			var opts = {
+				domain : api_url.domain,
+				path : api_url.path + "me",
+				method : "get",
+				headers : {
+					"Authorization" : "Bearer " + tokens.access_token
+				}
+			}
+			var req = http.request(opts, function(res) {
+				var ok = res.statusCode();
+				res.on('data', function(chunk) {
+					var data = ok ? JSON.parse(chunk) : chunk;
+					callback(ok, data);
+				});
+			});
+
+			req.on('error', function(err) {
+				callback(false, err);
+			});
+			req.end();
+		}
+	},
+
+	TokenExpiredError : "error: token_expired"
 }
+
+var api_url = {
+	domain : "api.spotify.com",
+	path : "/v1/"
+};
 
 var token_url = {
 	domain : "accounts.spotify.com",
@@ -190,13 +253,17 @@ function buildScopeParam(scopes) {
 	
 	var out = "&scope=";
 	for(var i=0; i < scopes.length; i++) {
-		var key = scopes[i];
-		var val = SCOPES[key];
-		if(val == undefined) { // Scope not found
-			throw new Error(key + " is not a scope in this library.");
+		var val = scopes[i];
+		var added = false;
+		for(key in module.exports.SCOPES) {
+			if(val == module.exports.SCOPES[key]) {
+				out += val + " ";
+				added = true;
+				break;
+			}
 		}
-		else { // Add scope
-			out += val + " ";
+		if(!added) { // Scope not found
+			throw new Error(val + " is not a scope in this library.");
 		}
 	}
 
