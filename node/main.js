@@ -2,6 +2,7 @@
 	TODOs:
 		* Refactor way errors are passed to rendered pages. Currently there is no
 			enumeration of errors.
+				Of Note: hostAuthResult and checkSid/verifySession
 		* Refactor/Split out routes into their seperate file. Host is quite large,
 			especially when factoring in the Socket.io commands.
 */
@@ -21,7 +22,6 @@ var fs = require('fs'),
 var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
-var PORT = process.env.PORT || 3000;
 
 var CLIENT_ID = spotify_keys.CLIENT_ID;
 var CLIENT_SECRET = spotify_keys.CLIENT_SECRET;
@@ -106,6 +106,7 @@ function Session() {
 	this.list = []; // Playlist
 	this.banned = []; // Banned user array
 
+	this.queingEnabled = true; // Host can toggle this start/stop queing from users
 	this.partyCode = 12345; // Party code public users use
 };
 
@@ -380,72 +381,102 @@ app.get('/berror', function(req, res) {
 	res.render('berror');
 });
 
+/* REST endpoint for the host's page. */
+app.get('/host', [checkForErrors, checkSid, verifySession, showControl]);
+
+// Verify host values before passing to hostControl
 function checkForErrors(req, res, next) {
 	var err = 0;
 	try {
 		err = res.query.err != undefined ? res.query.err : err;
-	} catch {}
+	} catch(e) {}
 
-	if(err == 0) { // Check session
-		var sid = req.cookie.sid;
-		if(typeof sid == 'undefined') {
-			res.render('host_login', {hostError : 1});
+	if(err == 0) { // No error
+		next(); // Check sids next
+	}
+	else {
+		// There is an error
+		req.error = err;
+		showLogin(req, res, next);
+	}
+}
+
+// Check if a session id in cookies
+function checkSid(req, res, next) {
+	var sid;
+	try {
+		sid = req.cookie.sid;
+	} catch(e) { sid = undefined }
+
+	if(typeof sid == 'undefined') {
+		req.error = 1;
+		showLogin(req, res, next);
+	}
+	else { // Sid exists, confirm session
+		req.sid = sid;
+		next();
+	}	
+}
+
+// Lookup session via SID and verify
+function verifySession(req, res, next) {
+	var sid = req.sid;
+	var sess = sessions.findBySid(sid);
+	if(sess.length <= 0) {
+		// No sessions from sid, go to error
+		req.error = 1;
+		showLogin(req, res, next);
+	}
+	else {
+		// Check tokens exist
+		if(!sess[0].tokens) {
+			// No token, go to error
+			req.error = 1;
+			showLogin(req, res, next);
 		}
 		else {
-			var sess = sessions.findBySid(sid);
-			if(sess.length <= 0) {
-				// No sessions from sid, go to error
-			}
-			else {
-				// Continue to host_control
-			}
-		}	
-	}
-}
-
-/* REST endpoint for the host's page. */
-app.get('/host', function(req, res) {
-	var err;
-	try { 
-		err = res.query.err != undefined ? res.query.err : 0;
-	} catch(e) {
-		err = 0;
-	}
-	
-	var sid = req.cookie.sid;
-	if(typeof sid == 'undefined') {
-		res.render('host_login', {hostError : 1});
-	}
-	else {
-		var sess = sessions.findBySid(sid);
-		if(sess.length <= 0) {
-
+			next();
 		}
 	}
-	if(session.tokens == null) {
-		res.render('host_login', {hostError : err});
-	}
-	else {
-		res.render('host_control');
-	}
-});
-
-// Most errors will kick the host back to login
-hostError = function(err) {
-	return function(req, res, next) {
-		console.log("Host Error: " + err;
-		res.render('host_login', {hostError: err});
-	};
 }
 
-// Authentication 
+function showControl(req, res, next) {
+	res.render('host_control');
+}
+
+function showLogin(req, res, next) {
+	if(req.error) {
+		res.render('host_login', {hostError: req.error});
+	}
+	else {
+		res.render('host_login', {hostError: 0});
+	}
+}
+
+app.get('/testHostControl', [testHostControl]);
+
+function testHostControl(req, res, next) {
+	/* Create Session stuff here */
+
+	res.render('host_control');
+}
+
+
+/*********************
+	Authentication
+**********************/
 function hostAuthResult(req, res, next) {
 	var code = req.query.code;
 	var state; 
-	try { state = req.query.state; } catch { state = undefined; }
+	try { state = req.query.state; } catch(e) { state = undefined; }
 
-	var route = state && (state != session.state) ? 'hostAuthError' : 'hostAuthOk';
-	next(route);
+	if(!state || state != session.state) {
+		req.error = 1;
+		showLogin(req, res, next); // No state response, show error
+	}
+	else {
+		hostAuthOk(req, res, next);
+	}
 }
 
 function hostAuthOk(req, res, next) {
@@ -463,7 +494,8 @@ function hostAuthOk(req, res, next) {
 			res.redirect(200, '/host');
 		}
 		else {
-			next('hostError');
+			req.error = 1; // Error fetching tokens
+			showLogin(req, res, next);
 		}
 	});
 }
@@ -491,7 +523,7 @@ function createSession(req, res, tokens) {
 	return ses;
 }
 
-app.get('/host/auth', [hostAuthResult, hostError, hostAuthOk]);
+app.get('/host/auth', [hostAuthResult]);
 
 app.post('/host/auth', function(req, res) {
 	var opts = {
@@ -513,18 +545,30 @@ app.post('/host/auth', function(req, res) {
 	Host Socket.io setup
 
 	Expects:
-		hash - hashed pass in HEX
+		sid - session id created at authentication in cookies
+
+	Note: If the IP of host does not match the one in the session
+		the SID points too, the connection will abort.
 */
 io.use(function(socket, next) {	
-	if(session.tokens != null) {
+	var sid = socket.request;
+	
+	var sess = sessions.findBySid(sid);
+	sess = sess ? ses[0] : null;
+	if(sess) {
+		var ip = socket.request.connection.remoteAddress;
+		if(sess.ip != ip) throw new Error("Session ip and connecting ip do not match");
 		console.log("Host Authenticated");
 		next();
 	}
 	else {
-		next(new Error("Host Not Authenticated"));
+		next(new Error("Session does not exist"));
 	}
 });
 
+/*
+	Host Socket events
+*/
 io.on('connection', function(socket) {
 	socket.on('ban', function(data) {
 		var id = data.id; 
@@ -570,6 +614,7 @@ io.on('connection', function(socket) {
 
 		// Request playlists of use
 		// Emit list names
+		socket.emit('updateLists', JSON.stringify(out));
 	});
 	socket.on('addPlaylist', function(data) {
 		var token = data.token;
@@ -578,6 +623,7 @@ io.on('connection', function(socket) {
 		// Fetch play list
 		// Loop adding to current party list
 		// Emit updatePlaylist w/ new list
+		socket.emit('updatePlaylist', JSON.stringify(out));
 	});
 	socket.on('disconnect', function(data) {
 		// Clear session
@@ -600,4 +646,4 @@ errors = {
 	INVALID_PARAMETERS : { code : 400, msg : "Invalid paramters supplied" }
 }
 
-app.listen(PORT);
+app.listen(80);

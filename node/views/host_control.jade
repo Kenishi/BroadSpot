@@ -1,28 +1,29 @@
 doctype html
-html
+html(ng-app="hostControlApp")
 	head
 		meta(charset="UTF-8")
 		title="Host Control"
 		link(href="../css/bootstrap.min.css" rel="stylesheet")
 		link(href="../css/host_control.css")
+		script(src="https://cdn.socket.io/socket.io-1.3.4.js")
 		script(src="../js/jquery.min.js")
 		script(src="../js/angular.min.js")
 		script(src="../js/bootstrap.min.js")
-	body
+	body(ng-controller="hostCtrl")
 		nav(class="navbar navbar-default navbar-fixed-top")
 			div(class="container-fluid")
 
 			div(class="collapse navbar-collapse")
 				ul(class="nav navbar-nav")
 					li
-						a(alt="Generate new party code") Party Code
-					li
-						a Ban List
-					li
-						a(alt="Change the host password") Password 
+						a(href="#" alt="Generate new party code") Party Code
 				ul(class="collapse navbar-right")
-					li
-						a Power
-						a Playlists
+					li(class="dropdown")
+						a(href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false") Admin
+							span(class="caret")
+						ul(class="dropdown-menu" role="menu")
+							a(href="#" onclick="showBanList()") Ban List
+							a(href="#" onclick="showCopyLists()") Playlists
+							a(href="#" onclick="togglePower()") Power
 
 						
