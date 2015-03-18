@@ -4,26 +4,67 @@ html(ng-app="hostControlApp")
 		meta(charset="UTF-8")
 		title="Host Control"
 		link(href="../css/bootstrap.min.css" rel="stylesheet")
-		link(href="../css/host_control.css")
-		script(src="https://cdn.socket.io/socket.io-1.3.4.js")
+		link(href="../css/host_control.css" rel="stylesheet")
 		script(src="../js/jquery.min.js")
+		script(src="../js/jquery.cookie.js")
 		script(src="../js/angular.min.js")
+		script(src="https://cdn.socket.io/socket.io-1.3.4.js")
+		script(src="../js/host.js")
 		script(src="../js/bootstrap.min.js")
-	body(ng-controller="hostCtrl")
+	body(id="body" ng-controller="hostCtrl")
 		nav(class="navbar navbar-default navbar-fixed-top")
 			div(class="container-fluid")
+				div(class="navbar-header")
+					button(type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#mainNavBar")
+						span(class="sr-only") Toggle navigation
+						span(class="icon-bar")
+						span(class="icon-bar")
+						span(class="icon-bar")
 
-			div(class="collapse navbar-collapse")
-				ul(class="nav navbar-nav")
-					li
-						a(href="#" alt="Generate new party code") Party Code
-				ul(class="collapse navbar-right")
-					li(class="dropdown")
-						a(href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false") Admin
-							span(class="caret")
-						ul(class="dropdown-menu" role="menu")
-							a(href="#" onclick="showBanList()") Ban List
-							a(href="#" onclick="showCopyLists()") Playlists
-							a(href="#" onclick="togglePower()") Power
+				div(class="collapse navbar-collapse" id="mainNavBar")
+					ul(class="nav navbar-nav")
+						li
+							a(href="#" alt="Generate new party code" id="partycode" onclick="partyCode()") Party Code
+					ul(class="nav navbar-nav navbar-right")
+						li(class="dropdown")
+							a(href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false") Admin
+								span(class="caret")
+							ul(class="dropdown-menu" role="menu" id="adminmenu")
+								li
+									a(href="#" onclick="showBanList()") Ban List
+								li
+									a(href="#" onclick="showCopyLists()") Playlists
+								li
+									a(href="#" ng-click="togglePower()") Power
+		div
+			h4(class="text-center") Playlist: 
+				span(ng-bind="playlistName")
+		div(class="container")
+			ul(class="list-group")
+				li(ng-repeat="track in playlist" class="list-group-item")
+					div(class="row")
+						div(class="ipaddr col-xs-2")
+							span(class="{{track.ipaddr ? 'show' : 'hidden'}}")
+								button(class="btn btn-default btn-block" onmouseover="ipMouseOver(event)" onmouseout="ipMouseOut(event)" ng-click="banModal(track)") {{track.ipaddr}}
+						div(class="artist col-xs-3") {{track.artist}}
+						div(class="trackTitle col-xs-3") {{track.title}}
+						div(class="album col-xs-3") {{track.album}}
+						div(class="col-xs-1")
+							button(class="removeBtn btn btn-default" title="Remove track from playlist")
+								span(class="glyphicon glyphicon-remove")
+
+		div(class="modal fade" role="dialog" id="banModal")
+			div(class="modal-dialog")
+				div(class="modal-content")
+					div(class="modal-header")
+						h4(class="modal-title") Ban User?
+						button(type="button" class="close" data-dismiss="modal" aria-label="Close")
+							span(aria-hidde="true") &times;
+					div(class="modal-body").
+						Do you want to ban <kbd>{{banModalData.ipaddr}}</kbd> and remove all their songs from the queue?
+					div(class="modal-footer")
+						button(class="btn btn-default" data-dismiss="modal") No
+						button(class="btn btn-primary" ng-click="doBan(banModalData.ipaddr)") Yes
+
 
 						

@@ -1,0 +1,9 @@
+body { padding-top: 70px; }
+
+.removeBtn:hover {
+	color: red;
+}
+
+#ipaddr>button:hover {
+	background: #CF4647;
+}

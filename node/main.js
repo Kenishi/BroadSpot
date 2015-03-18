@@ -10,6 +10,7 @@
 var fs = require('fs'),
 	crypto = require('crypto'),
 
+	winston = require('winston'),
 	express = require('express'),
 	bodyParser = require('body-parser'),
 	rest = require('rest'),
@@ -19,6 +20,8 @@ var fs = require('fs'),
 	spotify = require('./spotify'),
 	spotify_keys = require('./spotify_keys');
 
+winston.level = 'input';
+winston.cli();
 var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
@@ -77,13 +80,13 @@ var Sessions = {
 		});
 	},
 	findBySid : function(sid) {
-		var sess = this.sess.filter(function(ses) {
+		var sess = this.sessions.filter(function(ses) {
 			return ses.sid == sid;
 		});
 		return sess;
 	},
 	findByPartyCode : function(id) {
-		var sess = this.sess.filter(function(ses) {
+		var sess = this.sessions.filter(function(ses) {
 			return ses.partyCode == id;
 		});
 		return sess;
@@ -112,7 +115,7 @@ function Session() {
 
 /* Is user in the banned list? */
 Session.prototype.isBanned = function(ip) {
-	return this.banned.every(function(val) {
+	return !this.banned.every(function(val) {
 		return val.ip != ip;
 	});
 };
@@ -160,7 +163,7 @@ Session.prototype.unBanUser = function(ip) {
 	Return true if added, false if the user already exists
 */
 Session.prototype.addUser = function(ip) {
-	var exists = this.list.every(function(val) {
+	var exists = !this.list.every(function(val) {
 		return val.ip != ip;
 	})
 
@@ -211,7 +214,7 @@ Session.prototype.updateQueueTime = function(ip) {
 */
 Session.prototype.newPartyCode = function() {
 	var code = Math.round(Math.random()*100000);
-	while(code == session.partyCode) {
+	while(Sessions.findByPartyCode(code).length > 0) {
 		code = Math.round(Math.random()*100000);
 	}
 
@@ -263,21 +266,45 @@ app.get('/', function(req, res) {
 
 	id - the party's code
 */
-app.get('/party/:id', function(req, res) {
-	var ip = req.ip;
-	if(session.isBanned(ip)) {
-		res.redirect('/berror');
-	}
+app.get('/party/:id', [getSession, checkBan, showParty]);
 
-	// Show party page
+function getSession(req, res, next) {
 	var id = req.params.id;
-	if(id in sessions.findByPartyCode(id)) {
-		res.render('party');
-	} 
-	else {
-		res.redirect("/?err=1");
+
+	winston.debug("looking for session: " + id);
+	var session = Sessions.findByPartyCode(id);
+	if(session && session.length > 0) {
+		req.session = session[0];
+		winston.debug("session found: " + id);
+		next();
 	}
-});
+	else {
+		winston.debug("session not found: " + id);
+		res.redirect("/?err=1");
+		res.end();
+	}
+}
+
+function checkBan(req, res, next) {
+	var session = req.session;
+	var ip = req.ip;
+
+	winston.debug("checking ban on: " + ip);
+	if(session.isBanned(ip)) {
+		winston.debug(ip + " BANNED");
+		res.redirect('/berror');
+		res.end();
+	}
+	else {
+		winston.debug(ip + " OK");
+		next();
+	}
+}
+
+function showParty(req, res, next) {
+	winston.debug("showing party");
+	res.render('party');
+}
 
 /*
 	Search request for a song
@@ -354,24 +381,21 @@ app.post('/party', function(req, res) {
 	trackId - the track's url, this should be specified as a spotify
 		protocol URI
 */
-app.put('/queue/:id/:trackId', function(req, res) {
-	var id = req.params.id;
-	if(session.partyCode != id) {
-		res.redirect(out.code, '/?err=1');
-	}
-	var ip = req.ip;
+app.put('/queue/:id/:trackId', [getSession, checkBan, queueAction]);
 
-	// Redirect banned users to a fake error page
-	if(session.isBanned(ip)) {
-		res.redirect('/berror');
-	}
+function queueAction(req, res, next) {
+	var ip = req.ip;
+	var trackId = req.params.trackId;
+	var session = req.session;
 
 	session.addUser(ip);
 	var lastQueue = session.getQueueTime(ip);
 	doQueue(req.params.id, req.params.trackId, lastQueue);
 	session.updateQueueTime(ip);
+	
 	res.status(200).json({code:200});
-});
+	res.end();
+}
 
 /*
 	The page banned users are redirected to if they 
@@ -421,7 +445,7 @@ function checkSid(req, res, next) {
 // Lookup session via SID and verify
 function verifySession(req, res, next) {
 	var sid = req.sid;
-	var sess = sessions.findBySid(sid);
+	var sess = Sessions.findBySid(sid);
 	if(sess.length <= 0) {
 		// No sessions from sid, go to error
 		req.error = 1;
@@ -489,7 +513,7 @@ function hostAuthOk(req, res, next) {
 				expires_at : data.expires_at
 			}
 			var ses = createSession(req, res, tokens);
-			sessions.addSession(ses);
+			Sessions.addSession(ses);
 
 			res.redirect(200, '/host');
 		}
@@ -507,7 +531,7 @@ function createSession(req, res, tokens) {
 
 	var ip = req.ip;
 
-	var ses = sessions.createSession(sid);
+	var ses = Sessions.createSession(sid);
 	ses.ip = ip;
 
 	spotify.queryUserInfo(tokens, function(ok, data) {
@@ -553,7 +577,7 @@ app.post('/host/auth', function(req, res) {
 io.use(function(socket, next) {	
 	var sid = socket.request;
 	
-	var sess = sessions.findBySid(sid);
+	var sess = Sessions.findBySid(sid);
 	sess = sess ? ses[0] : null;
 	if(sess) {
 		var ip = socket.request.connection.remoteAddress;
@@ -646,4 +670,10 @@ errors = {
 	INVALID_PARAMETERS : { code : 400, msg : "Invalid paramters supplied" }
 }
 
-app.listen(80);
+var sess = Sessions.createSession();
+Sessions.addSession(sess);
+sess.sid = "09876";
+sess.partyCode = "12345";
+
+var port = process.env.PORT || 3000;
+app.listen(port);
