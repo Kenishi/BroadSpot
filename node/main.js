@@ -88,10 +88,12 @@ var Sessions = {
 		sess = sess.length > 0 ? sess[0] : null;
 		return sess;
 	},
-	findByPartyCode : function(id) {
-		var sess = this.sessions.filter(function(ses) {
-			return ses.partyCode == id;
+	findByPartyCode : function(code) {
+		var sess = this.sessions.filter(function(ele, index) {
+			var result = ele.partyCode == code;
+			return ele.partyCode == code;
 		});
+
 		sess = sess.length > 0 ? sess[0] : null;
 		return sess;
 	},
@@ -101,6 +103,16 @@ var Sessions = {
 		});
 		sess = sess.length > 0 ? sess[0] : null;
 		return sess;
+	},
+	debugPrintSessions : function() {
+		winston.debug("---CURRENT SESSIONS (" + this.sessions.length + ")---");
+		this.sessions.forEach(function(val) {
+			winston.debug("---Session---");
+			winston.debug("SID: " + val.sid);
+			winston.debug("SIP: " + val.sessionIP);
+			winston.debug("Party Code: " + val.partyCode);
+			winston.debug("-------------");
+		});
 	}
 };
 
@@ -122,6 +134,12 @@ function Session() {
 	this.queingEnabled = true; // Host can toggle this start/stop queing from users
 	this.partyCode = 12345; // Party code public users use
 };
+
+Session.prototype.toString = function() {
+	var out = "Sid: " + this.sid + "; CreateTime: " + this.createTime.toString() + "; SIP: " + this.sessionIP +
+		"; PartyCode: " + this.partyCode;
+	return out;
+}
 
 /* Is user in the banned list? */
 Session.prototype.isBanned = function(ip) {
@@ -280,11 +298,11 @@ app.get('/party/:id', [getSession, checkBan, showParty]);
 
 function getSession(req, res, next) {
 	var id = req.params.id;
-
+	Sessions.debugPrintSessions();
 	winston.debug("looking for session: " + id);
 	var session = Sessions.findByPartyCode(id);
-	if(session && session.length > 0) {
-		req.session = session[0];
+	if(session) {
+		req.session = session;
 		winston.debug("session found: " + id);
 		next();
 	}
@@ -363,17 +381,18 @@ app.post('/party', function(req, res) {
 	client(url).then(function(response) {
 		// Response data is in response.entity
 		var out = [];
-		var items = response.entity.tracks.items;
-		items.foreach(function(item) {
-			item.title = item.name;
-			item.uri = item.uri;
-			item.album = item.album.name;
-			item.artist = item.artists[0].name;
+		var tracks = response.entity.tracks.items;
+		tracks.forEach(function(trackResult) {
+			var item = {};
+			item.title = trackResult.name;
+			item.uri = trackResult.uri;
+			item.album = trackResult.album.name;
+			item.artist = trackResult.artists[0].name;
 			item.queued = false;
 			
-			var imgLen = items.album.images.length;
+			var imgLen = trackResult.album.images.length;
 			if(imgLen >= 1) { // Grab the smallest image
-				item.img = items.album.images[imgLen-1].url;
+				item.img = trackResult.album.images[imgLen-1].url;
 			}
 
 			out.push(item);
@@ -463,7 +482,7 @@ function verifySession(req, res, next) {
 	}
 	else {
 		// Check tokens exist
-		if(!sess[0].tokens) {
+		if(!sess.tokens) {
 			// No token, go to error
 			req.error = 1;
 			showLogin(req, res, next);
@@ -588,7 +607,6 @@ io.use(function(socket, next) {
 	var sid = socket.request;
 	
 	var sess = Sessions.findBySid(sid);
-	sess = sess ? ses[0] : null;
 	if(sess) {
 		var ip = socket.request.connection.remoteAddress;
 		if(sess.ip != ip) throw new Error("Session ip and connecting ip do not match");
@@ -700,9 +718,9 @@ errors = {
 }
 
 var sess = Sessions.createSession();
-Sessions.addSession(sess);
 sess.sid = "09876";
 sess.partyCode = "12345";
+Sessions.addSession(sess);
 
 var port = process.env.PORT || 3000;
 app.listen(port);
