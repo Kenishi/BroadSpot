@@ -5,6 +5,8 @@
 				Of Note: hostAuthResult and checkSid/verifySession
 		* Refactor/Split out routes into their seperate file. Host is quite large,
 			especially when factoring in the Socket.io commands.
+
+		* Set up production logging
 */
 
 var fs = require('fs'),
@@ -83,12 +85,21 @@ var Sessions = {
 		var sess = this.sessions.filter(function(ses) {
 			return ses.sid == sid;
 		});
+		sess = sess.length > 0 ? sess[0] : null;
 		return sess;
 	},
 	findByPartyCode : function(id) {
 		var sess = this.sessions.filter(function(ses) {
 			return ses.partyCode == id;
 		});
+		sess = sess.length > 0 ? sess[0] : null;
+		return sess;
+	},
+	findBySocket : function(socket) {
+		var sess = this.sessions.filter(function(ses) {
+			return ses.socket === socket;
+		});
+		sess = sess.length > 0 ? sess[0] : null;
 		return sess;
 	}
 };
@@ -103,9 +114,8 @@ function Session() {
 	this.userId = null; // Host Spotify User ID
 	this.state = getState(); // State used during authentication
 	this.tokens = null; // AccessToken and RefreshToken for this session
-
-	
 	this.playlistId = null; // The playlist id
+
 	this.list = []; // Playlist
 	this.banned = []; // Banned user array
 
@@ -446,7 +456,7 @@ function checkSid(req, res, next) {
 function verifySession(req, res, next) {
 	var sid = req.sid;
 	var sess = Sessions.findBySid(sid);
-	if(sess.length <= 0) {
+	if(!sess) {
 		// No sessions from sid, go to error
 		req.error = 1;
 		showLogin(req, res, next);
@@ -595,20 +605,22 @@ io.use(function(socket, next) {
 */
 io.on('connection', function(socket) {
 	socket.on('ban', function(data) {
-		var id = data.id; 
+		// TODO: Add findSession by socket
 		var ip = data.ip;
 
 		session.banUser(ip);
+		// socket.emit('updatePlaylist', JSON.stringify(list))
 	});
 
 	socket.on('unban', function(data) {
-		var id = data.id;
+		// TODO: Add findSession by socket
 		var ip = data.ip;
 
 		session.unBanUser(ip);
 	});
 
 	socket.on('getBanList', function(data) {
+		// TODO: Add findSession by socket
 		var list = [];
 		for(var i=0; i < session.banned.length; i++) {
 			if(session.banned[i] != undefined) {
@@ -619,29 +631,32 @@ io.on('connection', function(socket) {
 	});
 
 	socket.on('changeCode', function(data) {
+		// TODO: Add findSession by socket
 		var code = session.newPartyCode();
 		session.partyCode = code;
 
-		var out = { code : code };
+		var out = { partyCode : code };
 		socket.emit('updateCode', JSON.stringify(out));
 	});
 
 	socket.on('removeSong', function(data) {
-		var token = data.token;
+		// TODO: Add findSession by sockets
 		var trackId = data.trackId;
-		var listId = data.playlistId;
 
 		// Oo remove
 	});
-	socket.on('getPlayLists', function(data) {
-		var token = data.token;
+	socket.on('getPlaylists', function(data) {
+		var sess = Sessions.findBySocket(socket);
+		if(!sess) { /* error */}
 
 		// Request playlists of use
+		// Parse playlist
 		// Emit list names
 		socket.emit('updateLists', JSON.stringify(out));
 	});
 	socket.on('addPlaylist', function(data) {
-		var token = data.token;
+		var sess = Sessions.findBySocket(socket);
+		if(!sess) { /* error */ }
 		var listId = data.playlistId;
 
 		// Fetch play list
@@ -649,6 +664,20 @@ io.on('connection', function(socket) {
 		// Emit updatePlaylist w/ new list
 		socket.emit('updatePlaylist', JSON.stringify(out));
 	});
+
+	socket.on('updatePowerState', function(data) {
+		var sess = Sessions.findBySocket(socket);
+		if(!sess) { /* error */ }
+		var queueEnabled = data.queueEnabled;
+
+		sess.queueEnabled = queueEnabled;
+		var data = {
+			powered : sess.queueEnabled
+		};
+
+		socket.emit('updatePowerState', data);
+	});
+
 	socket.on('disconnect', function(data) {
 		// Clear session
 	});

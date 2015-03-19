@@ -24,47 +24,146 @@ html(ng-app="hostControlApp")
 				div(class="collapse navbar-collapse" id="mainNavBar")
 					ul(class="nav navbar-nav")
 						li
-							a(href="#" alt="Generate new party code" id="partycode" onclick="partyCode()") Party Code
+							a(href="#" class="navbar-btn" title="Generate new party code" id="partycode" ng-click="showChangeCode()" ng-bind="partyCode")
+						li
+							a(href="#" class="navbar-btn" title="Test adding to playlist" ng-click="testLoadPlaylist()") Test Playlist Load
 					ul(class="nav navbar-nav navbar-right")
 						li(class="dropdown")
-							a(href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false") Admin
+							a(href="#" class="navbar-btn dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false") Admin
 								span(class="caret")
 							ul(class="dropdown-menu" role="menu" id="adminmenu")
-								li
-									a(href="#" onclick="showBanList()") Ban List
-								li
-									a(href="#" onclick="showCopyLists()") Playlists
-								li
-									a(href="#" ng-click="togglePower()") Power
-		div
-			h4(class="text-center") Playlist: 
-				span(ng-bind="playlistName")
-		div(class="container")
-			ul(class="list-group")
-				li(ng-repeat="track in playlist" class="list-group-item")
-					div(class="row")
-						div(class="ipaddr col-xs-2")
-							span(class="{{track.ipaddr ? 'show' : 'hidden'}}")
-								button(class="btn btn-default btn-block" onmouseover="ipMouseOver(event)" onmouseout="ipMouseOut(event)" ng-click="banModal(track)") {{track.ipaddr}}
-						div(class="artist col-xs-3") {{track.artist}}
-						div(class="trackTitle col-xs-3") {{track.title}}
-						div(class="album col-xs-3") {{track.album}}
-						div(class="col-xs-1")
-							button(class="removeBtn btn btn-default" title="Remove track from playlist")
-								span(class="glyphicon glyphicon-remove")
+								div(class="button-group")
+									button(type="button" ng-click="showClearListWarning()" class="adminBtn btn btn-default" title="Clear the playlist")
+										span(class="glyphicon glyphicon-trash")
+									button(type="button" ng-click="showBanList()" class="adminBtn btn btn-default" title="Remove a ban")
+										span(class="glyphicon glyphicon-fire")
+									button(type="button" ng-click="showCopyList()" class="adminBtn btn btn-default" title="Copy your playlists to the party")
+										span(class="glyphicon glyphicon-th-list")
+									button(type="button" ng-click="togglePower()" ng-attr-id="{{powered?'powerOn':'powerOff'}}" class="adminBtn btn btn-default" title="Toggle party On/Off")
+										span(class="glyphicon glyphicon-off")
 
-		div(class="modal fade" role="dialog" id="banModal")
+		div
+			h4(class="text-center")
+				span(ng-bind="playlistName" class="lead" title="Playlist name in your spotify")
+		div(class="container")
+			div(class="panel panel-default ng-hide text-center" ng-show="playlist.length <= 0")
+				div(class="panel-body")
+					h4
+						p You have nothing in your playlist!
+						
+						p Copy in a playlist: 
+							kbd Admin
+								span(class="caret")
+							|  &gt; 
+							kbd
+								span(class="glyphicon glyphicon-th-list")
+						
+						p Your Party Code:
+						h3(style="dislay: inline-block !important;")
+							a(ng-href="/party/{{partyCode}}")
+								kbd
+									span(ng-bind="partyCode")
+
+			div(ng-show="playlist.length > 0" class="ng-hide")
+				ul(class="list-group")
+					li(ng-repeat="track in playlist" class="list-group-item")
+						div(class="row")
+							div(class="ipaddr col-md-2")
+								span(class="{{track.ipaddr ? 'show' : 'hidden'}}")
+									button(class="btn btn-default btn-block" onmouseover="ipMouseOver(event)" onmouseout="ipMouseOut(event)" ng-click="banModal(track)" title="Ban user") {{track.ipaddr}}
+							div(class="artist col-md-3") {{track.artist}}
+							div(class="trackTitle col-md-3") {{track.title}}
+							div(class="album col-md-3") {{track.album}}
+							div(class="col-md-1")
+								button(class="removeBtn btn btn-default" title="Remove track from playlist" ng-click="removeSong(track)")
+									span(class="glyphicon glyphicon-remove")
+
+		// Ban selected user modal
+		div(class="modal fade" role="dialog" id="banUserModal")
 			div(class="modal-dialog")
 				div(class="modal-content")
 					div(class="modal-header")
-						h4(class="modal-title") Ban User?
 						button(type="button" class="close" data-dismiss="modal" aria-label="Close")
-							span(aria-hidde="true") &times;
+							span(aria-hidde="true" class="modalCloseBtn") &times;
+						h4(class="modal-title") Ban User
 					div(class="modal-body").
 						Do you want to ban <kbd>{{banModalData.ipaddr}}</kbd> and remove all their songs from the queue?
 					div(class="modal-footer")
 						button(class="btn btn-default" data-dismiss="modal") No
 						button(class="btn btn-primary" ng-click="doBan(banModalData.ipaddr)") Yes
+		
+		// Clear playlist confirm modal
+		div(class="modal fade" role="dialog" id="clearListModal")
+			div(class="modal-dialog")
+				div(class="modal-content")
+					div(class="modal-header")
+						button(type="button" class="close" data-dismiss="modal" aria-label="Close")
+							span(aria-hidde="true" class="modalCloseBtn") &times;
+						h4(class="modal-title") Clear Playlist
+					div(class="modal-body").
+						Do you want to clear the playlist?
+					div(class="modal-footer")
+						button(class="btn btn-default" data-dismiss="modal") No
+						button(class="btn btn-primary" ng-click="clearPlaylist()") Yes
+				
 
+		// Copy in playlist modal
+		div(class="modal fade" role="dialog" id="copyListModal")
+			div(class="modal-dialog")
+				div(class="modal-content")
+					div(class="modal-header")
+						button(type="btn btn-default" class="close" data-dismiss="modal")
+							span(aria-hidde="true" class="modalCloseBtn") &times;
+						h4(class="modal-title") Copy in Playlist
+							span(id="listLoading" class="show")
+								small Loading...
+					div(class="modal-body")
+						ul(class="list-group")
+							li(ng-repeat="plItem in hostPlaylists" class="list-group-item")
+								div(class="row")
+									div(class="col-xs-5") {{plItem.name}}
+									div(class="col-xs-offset-3 col-xs-4")
+										button(class="btn btn-default btn-block" ng-click="copyInPlaylist(plItem.id, $event)") Copy
+		// Ban List Modal
+		div(class="modal fade" role="dialog" id="banListModal")
+			div(class="modal-dialog")
+				div(class="modal-content")
+					div(class="modal-header")
+						button(type="btn btn-default" class="close" data-dismiss="modal")
+							span(aria-hidde="true" class="modalCloseBtn") &times;
+						h4(class="modal-title") Remove a ban
+							span(id="banLoading" class="show")
+								small Loading...
+					div(class="modal-body")
+						ul(class="list-group")
+							li(ng-repeat="ban in banned" class="list-group-item")
+								div(class="row")
+									div(class="col-xs-5") {{ban.ipaddr}}
+									div(class="col-xs-offset-3 col-xs-4")
+										button(class="btn btn-default btn-block" ng-click="unBanUser(ban.ipaddr, $event)") Unban
 
-						
+		// Party Code Changer Modal
+		div(id="changeCodeModal" class="modal fade bs-example-modal-sm" tabindex="-1" role="dialog" aria-hidden="true")
+			div(class="modal-dialog modal-sm")
+				div(class="modal-content")
+					div(class="modal-header")
+						button(type="btn btn-default" class="close" data-dismiss="modal")
+							span(aria-hidde="true" class="modalCloseBtn") &times;
+						h4(class="modal-title") Get a new Party Code
+					div(class="modal-body text-center")
+						h3(id="changeCodeModalTxt")
+							kbd
+								a(ng-href="/party/{{partyCode}}" ng-bind="partyCode")
+						p
+							button(ng-click="genNewCode()" class="btn btn-success" id="genCodeBtn") Get a New Code
+						small Note: The old code will stop working
+
+		div(id="reconnectModal" class="modal fade bs-example-modal-sm" tabindex="-1" role="dialog" aria-hidden="true")
+			div(class="modal-dialog modal-sm")
+				div(class="modal-content")
+					div(class="modal-header")
+						h4(class="modal-title") Oops!
+					div(class="modal-body text-center")
+						| You got disconnected from the server.
+						br
+						| Attempting to reconnect...
