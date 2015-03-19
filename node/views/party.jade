@@ -39,7 +39,8 @@ html(ng-app="broadspotApp")
 									img(ng-src="{{result.img}}")
 								div(class="col-xs-6")
 									div(class="row") 
-										div(class="col-xs-12" id="resultTitle") {{result.title}}
+										div(class="col-xs-12" id="resultTitle") 
+											strong {{result.title}}
 									div(class="row")
 										div(class="col-xs-6") {{result.artist}}
 										div(class="col-xs-6") {{result.album}}
