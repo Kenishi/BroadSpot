@@ -1,5 +1,9 @@
 //var http = require('http');
 
+var querystring = require('querystring'),
+	rest = require('rest'),
+	mime = require('rest/interceptor/mime');
+
 module.exports = {
 
 	// function authorizeURL(client_id, redirect_uri, opts)
@@ -83,36 +87,29 @@ module.exports = {
 			code : code,
 			redirect_uri : redirect_uri,
 			client_id : client_id,
-			client_secret : client_secret
+			client_secret : client_secret,
+			grant_type : "authorization_code"
 		};
-		var body_str = querystring.stringify(body);
 
 		var opts = {
-			host : token_url.domain,
-			path : path,
+			path : "https://" + token_url.domain + token_url.path,
 			method : 'post',
+			entity : body,
 			headers : {
 				"Content-Type" : "application/x-www-form-urlencoded",
-				"Content-Length" : body_str.length
+				"Accept" : "application/json"
 			}
 		}
 
-		var req = http.request(opts, function(res) {
-			var ok = res.statusCode == 200;
-
-			res.on('data', function(chunk) {
-				var data = ok ? querystring.parse(chunk) : chunk;
-				data.expires_at = new Date(Date.now() + (data.expires_in * 1000 - 5000));
-				callback(ok, data);
-			});
+		var client = rest.wrap(mime);
+		client(opts).then(function(response) {
+			var data = response.entity;
+			data.expires_at = new Date(Date.now() + (parseInt(data.expires_in) * 1000 - 5000));
+			callback(true, data);
+		})
+		.catch(function(errorData) {
+			callback(false, errorData);
 		});
-
-		req.on('error', function(e) {
-			callback(false, e);
-		});
-
-		req.write(body_str);
-		req.end();
 	},
 
 	/*
@@ -134,36 +131,31 @@ module.exports = {
 			grant_type : "refresh_token",
 			refresh_token : refresh_token,
 			client_id : client_id,
-			client_secret : client_secret
+			client_secret : client_secret,
+			grant_type : "authorization_code"
 		};
-		var body_str = querystring.stringify(body);
 
 		var opts = {
-			domain : token_url.domain,
-			path : token_url.path,
-			method: 'post',
+			path : "https://" + token_url.domain + token_url.path,
+			method : 'post',
+			entity : body,
 			headers : {
 				"Content-Type" : "application/x-www-form-urlencoded",
-				"Content-Length" : body_str.length
+				"Accept" : "application/json"
 			}
-		};
+		}
 
-		var req = http.request(opts, function(res) {
-				var ok = res.statusCode;
-				res.on('data', function(chunk) {
-					var data = ok ? querystring.parse(chunk) : chunk;
-					data.expires_at = new Date(Date.now() + (data.expires_in * 1000 - 5000));
-					callback(ok, data);
-				});
+		var client = rest.wrap(mime);
+		client(opts).then(function(response) {
+			var data = response.entity;
+			data.expires_at = new Date(Date.now() + (parseInt(data.expires_in) * 1000 - 5000));
+			callback(true, data);
+		})
+		.catch(function(errorData) {
+			callback(false, errorData);
 		});
-
-		req.on('error', function(e) {
-			callback(false, e);
-		});
-
-		req.write(body_str);
-		req.end();
 	},
+
 	/*
 		Retrieve a user's info.
 
@@ -198,25 +190,20 @@ module.exports = {
 		}
 		else {
 			var opts = {
-				domain : api_url.domain,
-				path : api_url.path + "me",
+				path : "https://" + api_url.domain + api_url.path + "me",
 				method : "get",
 				headers : {
 					"Authorization" : "Bearer " + tokens.access_token
 				}
 			}
-			var req = http.request(opts, function(res) {
-				var ok = res.statusCode();
-				res.on('data', function(chunk) {
-					var data = ok ? JSON.parse(chunk) : chunk;
-					callback(ok, data);
-				});
+			var client = rest.wrap(mime);
+			client(opts).then(function(response) {
+				var data = response.entity;
+				callback(true, data);
+			})
+			.catch(function(errorData) {
+				callback(false, errorData);
 			});
-
-			req.on('error', function(err) {
-				callback(false, err);
-			});
-			req.end();
 		}
 	},
 
@@ -235,7 +222,7 @@ var token_url = {
 
 var authorize_url = { 
 	domain : "accounts.spotify.com",
-	path : "/authorize/?client_id={clientid}&response_type=cose&redirect_uri={redirecturi}{state}{scope}{showdialog}"
+	path : "/authorize/?client_id={clientid}&response_type=code&redirect_uri={redirecturi}{state}{scope}{showdialog}"
 };
 
 function buildShowDlgParam(doShow) {

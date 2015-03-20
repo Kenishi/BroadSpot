@@ -1,4 +1,22 @@
 /*
+	Left off at:
+	Getting the socket events working. Many events needs to have a "findBySocket"
+	added to get the session to be able to do anything.
+
+	Debug logs need to be added to confirm that the server-client connection is working
+
+	Remove the test session from bottom.
+
+	Remove the test code in the host_control
+
+	Add an emit.changeCode so host can get his party code
+
+	Clean up logging code a little bit
+
+	FIX the redirect after auth finishes, it gets stuck on the page
+*/
+
+/*
 	TODOs:
 		* Refactor way errors are passed to rendered pages. Currently there is no
 			enumeration of errors.
@@ -7,18 +25,22 @@
 			especially when factoring in the Socket.io commands.
 
 		* Set up production logging
+		* Create session save on receiving SIGTERM (process.on('SIGTERM', func))
+		* Create session restore on restart
 */
 
 var fs = require('fs'),
 	crypto = require('crypto'),
+	os = require('os'),
 
 	winston = require('winston'),
 	express = require('express'),
 	bodyParser = require('body-parser'),
 	rest = require('rest'),
 	mime = require('rest/interceptor/mime'),
-	cookieParser = require('cookie-parser');
-	cookieSession = require('cookie-sessions');
+	cookieParser = require('cookie-parser'),
+	cookieSession = require('cookie-sessions'),
+	uuid = require('node-uuid'),
 	spotify = require('./spotify'),
 	spotify_keys = require('./spotify_keys');
 
@@ -31,9 +53,14 @@ var io = require('socket.io')(server);
 var CLIENT_ID = spotify_keys.CLIENT_ID;
 var CLIENT_SECRET = spotify_keys.CLIENT_SECRET;
 
-var HOSTNAME = "localhost";
-var AUTH_REDIRECT_URL = "http://" + HOSTNAME + "/host/auth";
+var PORT = process.env.PORT || 3000;
+var HOSTNAME = os.hostname();
+var AUTH_REDIRECT_URL = "http://" + HOSTNAME + ":" + PORT + "/host/auth";
 var MAX_RESULTS = 30;
+var AUTH_STATE = uuid.v4().replace(/-/g,'');
+
+var SESSION_QUEUING_TIMEOUT = 3600 * 1000; // Queuing is disabled after 1 hour of no host
+var SESSION_DELETE_TIMEOUT = (3600 * 24) * 1000; // Session is removed after a day of no reconnect
 
 /* All current running sessions */
 var Sessions = {
@@ -42,9 +69,9 @@ var Sessions = {
 	createSession : function(sid) {
 		var sess = null;
 		if(sid) {
-			if(getSession(sid)) {
+			if(this.getSession(sid)) {
 				// Remove previous session
-				var oldSess = getSession(sid);
+				var oldSess = this.getSession(sid);
 				oldSess.destroySession();
 				oldSess = null;
 			}
@@ -104,6 +131,10 @@ var Sessions = {
 		sess = sess.length > 0 ? sess[0] : null;
 		return sess;
 	},
+	destroySession : function(targetSess) {
+		this.removeSession(targetSess);
+		targetSess.destroySession();
+	},
 	debugPrintSessions : function() {
 		winston.debug("---CURRENT SESSIONS (" + this.sessions.length + ")---");
 		this.sessions.forEach(function(val) {
@@ -131,8 +162,11 @@ function Session() {
 	this.list = []; // Playlist
 	this.banned = []; // Banned user array
 
-	this.queingEnabled = true; // Host can toggle this start/stop queing from users
+	this.queueingEnabled = true; // Host can toggle this start/stop queing from users
 	this.partyCode = 12345; // Party code public users use
+
+	this.disableQueueTimer = null; // Timer ID for disabling queuing
+	this.deleteSessionTimer = null; // Timer ID for deleting this session
 };
 
 Session.prototype.toString = function() {
@@ -258,14 +292,27 @@ Session.prototype.getUserId = function() {
 };
 
 Session.prototype.destroySession = function() {
-	if(this.socket.connected) {
-		this.socket.disconnect('destroying');
+	if(this.socket && this.socket.connected) {
+		this.socket.disconnect();
 	}
 
 	this.socket = null;
 	this.sid = null;
 	this.tokens = null;
 	this.partyCode = null;
+};
+
+Session.prototype.clearTimers = function() {
+	if(this.queueTimer) {
+		clearTimeout(this.queueTimer);
+		this.queueTimer = null;
+		// LOG CLEARED QUEUE TIMER (info)
+	}
+	if(this.deleteTimer) {
+		clearTimeout(this.deleteTimer);
+		this.deleteTimer = null;
+		// LOG CLEARED DELETE TIMER (info)
+	}
 }
 
 
@@ -275,10 +322,12 @@ app.set('views', __dirname + "/views");
 app.set('view engine', 'jade');
 
 // Make static files available
-app.use(express.static(__dirname + "/public"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser({}));
+app.use(express.static(__dirname + "/public"));
+
+
 
 /*
 	Index page
@@ -440,16 +489,20 @@ app.get('/host', [checkForErrors, checkSid, verifySession, showControl]);
 // Verify host values before passing to hostControl
 function checkForErrors(req, res, next) {
 	var err = 0;
+	winston.debug("/host: check for errors");
+
 	try {
 		err = res.query.err != undefined ? res.query.err : err;
 	} catch(e) {}
 
 	if(err == 0) { // No error
+		winston.debug("/host: no errors");
 		next(); // Check sids next
 	}
 	else {
 		// There is an error
 		req.error = err;
+		winston.debug("/host: error " + req.error);
 		showLogin(req, res, next);
 	}
 }
@@ -457,15 +510,18 @@ function checkForErrors(req, res, next) {
 // Check if a session id in cookies
 function checkSid(req, res, next) {
 	var sid;
+	winston.debug("/host: checking sid");
 	try {
-		sid = req.cookie.sid;
+		winston.log("debug", "Cookies: ", req.cookies);
+		sid = req.cookies.sid;
 	} catch(e) { sid = undefined }
 
 	if(typeof sid == 'undefined') {
-		req.error = 1;
+		winston.debug("/host: no sid in cookie, go to login");
 		showLogin(req, res, next);
 	}
 	else { // Sid exists, confirm session
+		winston.debug("/host: found sid")
 		req.sid = sid;
 		next();
 	}	
@@ -477,6 +533,7 @@ function verifySession(req, res, next) {
 	var sess = Sessions.findBySid(sid);
 	if(!sess) {
 		// No sessions from sid, go to error
+		winston.debug("/host: no sesssion obj found, goto login w/ error");
 		req.error = 1;
 		showLogin(req, res, next);
 	}
@@ -484,10 +541,12 @@ function verifySession(req, res, next) {
 		// Check tokens exist
 		if(!sess.tokens) {
 			// No token, go to error
+			winston.debug("/host: no session tokens found, goto login w/ error");
 			req.error = 1;
 			showLogin(req, res, next);
 		}
 		else {
+			winston.debug("/host: login complete go to host control");
 			next();
 		}
 	}
@@ -499,9 +558,11 @@ function showControl(req, res, next) {
 
 function showLogin(req, res, next) {
 	if(req.error) {
+		winston.debug("Showing host longin w/ error: " + req.error);
 		res.render('host_login', {hostError: req.error});
 	}
 	else {
+		winston.debug("Show host login no error");
 		res.render('host_login', {hostError: 0});
 	}
 }
@@ -519,34 +580,47 @@ function testHostControl(req, res, next) {
 	Authentication
 **********************/
 function hostAuthResult(req, res, next) {
-	var code = req.query.code;
 	var state; 
 	try { state = req.query.state; } catch(e) { state = undefined; }
 
-	if(!state || state != session.state) {
+	winston.debug("checking auth result");
+	if(!state) {
+		winston.debug("no state, move to login");
+		showLogin(req, res, next); // No state
+	}
+	else if(state != AUTH_STATE) {
 		req.error = 1;
-		showLogin(req, res, next); // No state response, show error
+		winston.debug("state wrong, move to login. error: " + req.error + "; state: " + state);
+		showLogin(req, res, next); // State, but wrong show error
 	}
 	else {
+		winston.debug("auth ok, continue logging in; state: " + state);
 		hostAuthOk(req, res, next);
 	}
 }
 
 function hostAuthOk(req, res, next) {
+	var code = req.query.code;
+	winston.debug("getTokens: code=" + code);
 	spotify.getTokens(code, AUTH_REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, function(success, data) {
 		if(success) {
+			winston.debug("tokens got successfully");
+			winston.debug(data);
 			var tokens = {
 				access_token : data.access_token,
 				refresh_token : data.refresh_token,
-				expires_in : expires_in,
+				expires_in : data.expires_in,
 				expires_at : data.expires_at
 			}
+			winston.log('debug', "tokens: %j", tokens);
 			var ses = createSession(req, res, tokens);
 			Sessions.addSession(ses);
 
 			res.redirect(200, '/host');
 		}
 		else {
+			winston.debug("failed to get tokens");
+			winston.debug(data);
 			req.error = 1; // Error fetching tokens
 			showLogin(req, res, next);
 		}
@@ -555,8 +629,9 @@ function hostAuthOk(req, res, next) {
 
 // Called by hostAuthOk to build the session
 function createSession(req, res, tokens) {
-	var sid = Math.floor(1 + Math.random() * 0x1000000);
-	res.cookie("sid", sid.toString());
+	var sid = uuid.v4();
+	res.cookie("sid", sid);
+	winston.debug("sid cookie set:" + sid);
 
 	var ip = req.ip;
 
@@ -565,14 +640,15 @@ function createSession(req, res, tokens) {
 
 	spotify.queryUserInfo(tokens, function(ok, data) {
 		if(ok) {
-			var id = data.id;
-			ses.userId = id;
+			ses.userId = data.id;
+			winston.debug("user id set: " + ses.userId);
 		}
 		else {
-			console.log("Error getting user info: " + data);
+			winston.error("Error getting user info: " + data);
 		}
 	});
-
+	ses.tokens = tokens;
+	winston.debug("createSession success: " + ses.toString());
 	return ses;
 }
 
@@ -580,7 +656,7 @@ app.get('/host/auth', [hostAuthResult]);
 
 app.post('/host/auth', function(req, res) {
 	var opts = {
-		state : session.state,
+		state : AUTH_STATE,
 		scopes : [
 			spotify.SCOPES.PLAYLIST_READ_PRIVATE,
 			spotify.SCOPES.PLAYLIST_MODIFY_PUBLIC,
@@ -621,13 +697,56 @@ io.use(function(socket, next) {
 /*
 	Host Socket events
 */
-io.on('connection', function(socket) {
+io.on('connection', function(socket, handshakeData) {
+	
+	/********************
+		Connection Setup 
+	*********************/
+	// Look for prior session using sid
+	var sid = handshakeData.sid;
+	var sess = null;
+	if(sid) {
+		sess = Sessions.findBySid(sid);
+	}
+	else {
+		// No SID, so disconnect and abort
+		socket.disconnect();
+		return;
+	}
+
+	if(sess) {
+		// Remove any set timers
+		var queueTimer = sess.queueTimer,
+			deleteTimer = sess.deleteTimer;
+		if(queueTimer) {
+			clearTimeout(queueTimer);
+		}
+		if(deleteTimer) {
+			clearTimeout(deleteTimer);
+		}
+		queueTimer = null;
+		deleteTimer = null;
+	} 
+	else {
+		// No session, so discconect and about
+		socket.disconnect();
+		return;
+	}
+
+	/******************
+		Event Handlers
+	*******************/
+
 	socket.on('ban', function(data) {
 		// TODO: Add findSession by socket
-		var ip = data.ip;
+		winston.debug("ban: " + data.ip);
+		var sess = Sessions.findBySocket(socket);
+		if(sess) {
+			var ip = data.ip;
 
-		session.banUser(ip);
-		// socket.emit('updatePlaylist', JSON.stringify(list))
+			session.banUser(ip);
+			socket.emit('updatePlaylist', JSON.stringify(list))
+		}
 	});
 
 	socket.on('unban', function(data) {
@@ -697,7 +816,13 @@ io.on('connection', function(socket) {
 	});
 
 	socket.on('disconnect', function(data) {
-		// Clear session
+		var sess = Sessions.findBySocket(socket);
+		if(!sess) { return; }
+
+		// Set timeout for turning off queuing on session
+		sess.disableQueueTimer = setTimeout(disableQueueing, SESSION_QUEUING_TIMEOUT);
+		// Set timeout for deleting sessions
+		sess.deleteSessionTimer = setTimeout(deleteSession, SESSION_DELETE_TIMEOUT);
 	});
 });
 
@@ -713,6 +838,14 @@ function getState() {
 	return sid;	
 }
 
+function disableQueueing(sess) {
+	sess.queueingEnabled = false;
+}
+
+function deleteSession(sess) {
+	Sessions.destroySession(sess);
+}
+
 errors = {
 	INVALID_PARAMETERS : { code : 400, msg : "Invalid paramters supplied" }
 }
@@ -722,5 +855,5 @@ sess.sid = "09876";
 sess.partyCode = "12345";
 Sessions.addSession(sess);
 
-var port = process.env.PORT || 3000;
-app.listen(port);
+app.listen(PORT);
+winston.info("server listening at: " + HOSTNAME + ":" + PORT);

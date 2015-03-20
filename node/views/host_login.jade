@@ -3,13 +3,13 @@ html
 	head
 		meta(charset="UTF-8")
 		title="Host Login"
-		link(href="./css/bootstrap.min.css" rel="stylesheet")
-		link(href="./css/host.css" rel="stylesheet")
-		script(src="./js/jquery.min.js")
-		script(src="./jsjquery.cookie.js")
-		script(src="./js/angular.min.js")
-		script(src="./js/bootstrap.min.js")
-		script(src="./js/host_login.js")
+		link(href="../css/bootstrap.min.css" rel="stylesheet")
+		link(href="../css/host.css" rel="stylesheet")
+		script(src="../js/jquery.min.js")
+		script(src="../js/jquery.cookie.js")
+		script(src="../js/angular.min.js")
+		script(src="../js/bootstrap.min.js")
+		script(src="../js/host_login.js")
 		script(type="text/javascript").
 			var hostError = #{hostError};
 	body
@@ -21,4 +21,6 @@ html
 						div(class="panel-body")
 							span(id="error_msg")
 				div(class="container")
-					button(class="control-button btn btn-default" id="loginbtn" onclick="login()") Login
+					button(class="control-button btn btn-default" id="loginbtn" onclick="login()") 
+						object(type="image/svg+xml" data="../image/spotifytest.svg" id="spotifysvg")
+						|   Login
