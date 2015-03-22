@@ -1,7 +1,26 @@
 /*
+	Left off working on copyOverPlaylists call in Spotify lib.
+
+	Was working on getting the addSongs function working so copyOver
+	could simply use that, and doQueue() in Session can use it as well.
+
+	The current problem is figuring a nice way to chunk large track lists
+	up and execute them recursively with the _recurseAddSongs call.
+
+	LookupPlayListId and CreateBroadSpotPlaylist still need to be completed
+	within the Spotify lib.
+
+	!!!! ALSO, find where spotify.refreshToken() is used in the code
+	and update it for the new Promise implementation.
+*/
+
+/*
 	Left off at:
 	Getting the socket events working. Many events needs to have a "findBySocket"
 	added to get the session to be able to do anything.
+
+	Rework spotify calls to be Promise based. It fits in better with the way the
+	REST library already currently works.
 
 	Debug logs need to be added to confirm that the server-client connection is working
 
@@ -25,8 +44,21 @@
 			especially when factoring in the Socket.io commands.
 
 		* Set up production logging
+		* Need to look into what happens if a song not available in a hosts region
+			is added to the queue. Does an error occur on add?
+		* BUG: Serch results don't pull all of the artists name from a search result
+			it only pulls the first artist on the track.
+			Need to modify the PARTY SEARCH endpoint.
+			Need to modify "spotify.getPlaylistTracks"
+			Need to modify the web frontend so it expects an array of artist names
+
 		* Create session save on receiving SIGTERM (process.on('SIGTERM', func))
 		* Create session restore on restart
+		* Move doQueue into Session prototype
+		* Move playlist operations into Session prototype
+		* Move token based operations into Session prototype
+		* Move the /party search functionallity into spotify.js
+		* Refactor getPlaylists emit event => getHostsPlaylists in frontend and backend
 */
 
 var fs = require('fs'),
@@ -41,8 +73,10 @@ var fs = require('fs'),
 	cookieParser = require('cookie-parser'),
 	cookieSession = require('cookie-sessions'),
 	uuid = require('node-uuid'),
+
 	spotify = require('./spotify'),
-	spotify_keys = require('./spotify_keys');
+	spotify_keys = require('./spotify_keys'),
+	errors = require('./public/js/errors');
 
 winston.level = 'input';
 winston.cli();
@@ -159,11 +193,36 @@ function Session() {
 	this.tokens = null; // AccessToken and RefreshToken for this session
 	this.playlistId = null; // The playlist id
 
-	this.list = []; // Playlist
+
+	/* 
+		Users that have queued tracks.
+		{ 
+			ip: string, - ip of the user
+			lastQueueTime: int - last time user added a song
+		}
+	*/
+	this.userList = []; // Users that have queued
+
+	/*
+		Array of objects representing tracks in playlist
+		{
+			ip: string - ip of the user who queued it
+			trackUri: string - spotify URI of the track
+		}
+	*/
+	this.playList = [];
+
+	/*
+		Array of objects of banned users
+		{
+			ip: string, - ip of banned user
+			lastQueueTime: int - last time user added a song
+		}
+	*/
 	this.banned = []; // Banned user array
 
 	this.queueingEnabled = true; // Host can toggle this start/stop queing from users
-	this.partyCode = 12345; // Party code public users use
+	this.partyCode = null; // Party code public users use
 
 	this.disableQueueTimer = null; // Timer ID for disabling queuing
 	this.deleteSessionTimer = null; // Timer ID for deleting this session
@@ -186,10 +245,12 @@ Session.prototype.isBanned = function(ip) {
 	Add a user to ban list for the session
 */
 Session.prototype.banUser = function(ip) {
+	if(!ip) throw new Error("IP is required to ban user");
+
 	var user;
 
 	// Remove from user list
-	this.list = this.list.filter(function(val) {
+	this.userList = this.userList.filter(function(val) {
 		if(val.ip == ip) {
 			user = val;
 			return false;
@@ -201,12 +262,17 @@ Session.prototype.banUser = function(ip) {
 	if(user) {
 		this.banned.push(user);
 	}
+
+	// Remove Songs from playlist
+	this.removeSongsByIp(ip);
 };
 
 /*
 	Remove a user from the ban list
 */
 Session.prototype.unBanUser = function(ip) {
+	if(!ip) throw new Error("IP is required to unban user");
+
 	var user;
 
 	this.banned = this.banned.filter(function(val) {
@@ -217,7 +283,7 @@ Session.prototype.unBanUser = function(ip) {
 		return true;
 	});
 
-	this.list.push(user);
+	this.userList.push(user);
 };
 
 /*
@@ -225,16 +291,18 @@ Session.prototype.unBanUser = function(ip) {
 	Return true if added, false if the user already exists
 */
 Session.prototype.addUser = function(ip) {
-	var exists = !this.list.every(function(val) {
+	if(!ip) throw new Error("IP of user is required to add to the userlist");
+
+	var exists = !this.userList.every(function(val) {
 		return val.ip != ip;
-	})
+	});
 
 	if(!exists) {
 		newUser = {
 			ip : ip,
 			lastQueueTime : 0
 		};
-		this.list.push(newUser);
+		this.userList.push(newUser);
 	}
 
 	// Logic note: If the user didn't exist we added
@@ -247,28 +315,66 @@ Session.prototype.addUser = function(ip) {
 	Return timestamp, null if the user doesn't exist
 */
 Session.prototype.getQueueTime = function(ip) {
-	for(var i=0; i < this.list.length; i++) {
-		var user = this.list[i];
-		if(user.ip == ip) {
-			return user.lastQueueTime;
-		}
-	}
-	return null;
+	if(!ip) throw new Error("IP is required to get queue time");
+
+	var user = this.userList.filter(function(val) {
+		return val.ip == ip;
+	});
+
+	return user.length > 0 ? user[0].lastQueueTime : null;
 };
 
 /*
 	Update the queue time of the ip to now
+
+	Returns the user if found with updated time, null if not found
 */
 Session.prototype.updateQueueTime = function(ip) {
-	for(var i=0; i < this.list.length; i++) {
-		var user = this.list[i];
-		if(user.ip == ip) {
-			user.lastQueueTime = new Date();
-			return user;
-		}
+	if(!ip) throw new Error("IP is required to update queue time");
+
+	var user = this.userList.filter(function(val) {
+		return val.ip == ip;
+	});
+
+	if(user.length > 0) {
+		user[0].lastQueueTime = Date.now();
+		return user[0];
 	}
-	return null;
+	else {
+		return null;
+	}
 };
+
+Session.prototype.addTrack = function(ip, trackUri) {
+	if(!ip) throw new Error("IP of user adding the track is required");
+	if(!trackUri) throw new Error("Track URI is required to add to the playlist");
+
+	// Get session
+	// Get lookup user
+	// Get queue time
+	// Determine where to insert the track
+	// Add track to server side playlist
+	// Add track to spotify playlist
+}
+
+/*
+	Remove all songs added by IP
+
+	ip: string - ip of the user
+*/
+Session.prototype.removeSongsByIp = function(ip, callback) {
+	if(!callback || typeof callback != 'function') throw new Error("Callback must be a function");
+
+	var removeList = [];
+	this.playList = this.playList.filter(function(val) {
+		if(val.ip == ip) {
+			removeList.push(val);
+			return false;
+		}
+		return true;
+	});
+	spotify.removeSongs(this.tokens, this.userId, this.playlistId, removeList, callback);
+}
 
 /*
 	Generates a new party code but doesn't update
@@ -313,6 +419,47 @@ Session.prototype.clearTimers = function() {
 		this.deleteTimer = null;
 		// LOG CLEARED DELETE TIMER (info)
 	}
+}
+
+/*
+	Verify access_token has not expired and refresh if
+	it has.
+
+	On Success:
+		Promise will resolve with 2 parameters.
+			status : boolean set to True
+			data : object - 
+				{
+					code : int = 200
+					msg : string - message stating whether it was refreshed or not
+				}
+	On Error:
+		Promise will resolve with 2 paramters.
+			status : boolean set to False
+			data : object - values may differ depending on where the error occured.
+*/
+Session.prototype.verifyFreshTokens = function() {
+	if(!this.tokens) throw new Error("Session tokens are required");
+
+	return new Promise(function(resolve, reject) {
+		var hasExpired = this.tokens.expires_at - Date.now();
+		if(hasExpired) {
+			spotify.refreshTokens(this.tokens.refresh_token, CLIENT_ID, CLIENT_SECRET)
+			.then(function(ok, data) {
+				resolve(true, { code: 200, msg: "tokens ok. refreshed."});
+			})
+			.catch(function(ok, data) {
+				reject(ok, data);
+			});
+		}
+		else {
+			resolve(true, { code: 200, msg: "tokens ok. not refreshed."});
+		}
+	});
+}
+
+Session.prototype.doQueue = function(ip, trackId, lastQueue) {
+	winston.debug(this.partyCode, ":", ip, ":", trackId, ":: Added to queue");
 }
 
 
@@ -409,13 +556,13 @@ app.post('/party', function(req, res) {
 	try {
 		query = req.body.params.query;
 	} catch(e) {
-		var out = errors.INVALID_PARAMETERS;
+		var out = new errors.INVALID_PARAMETERS();
 		res.status(out.code).json(out);
 		return;
 	}
 
 	if(typeof query == 'undefined' || query.length <= 0) {
-		var out = errors.INVALID_PARAMETERS;
+		var out = new errors.INVALID_PARAMETERS();
 		res.status(out.code).json(out);
 		return;
 	}
@@ -468,7 +615,7 @@ function queueAction(req, res, next) {
 
 	session.addUser(ip);
 	var lastQueue = session.getQueueTime(ip);
-	doQueue(req.params.id, req.params.trackId, lastQueue);
+	session.doQueue(ip, req.params.trackId, lastQueue);
 	session.updateQueueTime(ip);
 	
 	res.status(200).json({code:200});
@@ -601,7 +748,7 @@ function hostAuthResult(req, res, next) {
 
 function hostAuthOk(req, res, next) {
 	var code = req.query.code;
-	winston.debug("getTokens: code=" + code);
+	winston.log("/host/auth: retrieving tokens");
 	spotify.getTokens(code, AUTH_REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, function(success, data) {
 		if(success) {
 			winston.debug("tokens got successfully");
@@ -612,15 +759,13 @@ function hostAuthOk(req, res, next) {
 				expires_in : data.expires_in,
 				expires_at : data.expires_at
 			}
-			winston.log('debug', "tokens: %j", tokens);
 			var ses = createSession(req, res, tokens);
 			Sessions.addSession(ses);
 
-			res.redirect(200, '/host');
+			res.redirect('/host');
 		}
 		else {
-			winston.debug("failed to get tokens");
-			winston.debug(data);
+			winston.log("error", "failed to get tokens reason:", data);
 			req.error = 1; // Error fetching tokens
 			showLogin(req, res, next);
 		}
@@ -686,35 +831,8 @@ io.use(function(socket, next) {
 	if(sess) {
 		var ip = socket.request.connection.remoteAddress;
 		if(sess.ip != ip) throw new Error("Session ip and connecting ip do not match");
-		console.log("Host Authenticated");
-		next();
-	}
-	else {
-		next(new Error("Session does not exist"));
-	}
-});
-
-/*
-	Host Socket events
-*/
-io.on('connection', function(socket, handshakeData) {
-	
-	/********************
-		Connection Setup 
-	*********************/
-	// Look for prior session using sid
-	var sid = handshakeData.sid;
-	var sess = null;
-	if(sid) {
-		sess = Sessions.findBySid(sid);
-	}
-	else {
-		// No SID, so disconnect and abort
-		socket.disconnect();
-		return;
-	}
-
-	if(sess) {
+		winston.info("Host Authenticated");
+		
 		// Remove any set timers
 		var queueTimer = sess.queueTimer,
 			deleteTimer = sess.deleteTimer;
@@ -726,11 +844,46 @@ io.on('connection', function(socket, handshakeData) {
 		}
 		queueTimer = null;
 		deleteTimer = null;
-	} 
+
+		// Set up session
+		sess.socket = socket;
+		initSessionPlaylistOnSpotify(sess)
+			.then(function(ok, playlistId) {
+				if(playlistId) {
+					sess.playlistId = playlistId;
+				}
+				else {
+					winston.error("Unexpected return in init playlist. playlistId: ", playlistId);
+					socket.disconnect();
+					Sessions.destroySession(sess);
+				}
+			})
+			.catch(function(ok, data) {
+				winston.error("Error init host playlist: ", data);
+				socket.disconnect();
+				Sessions.destroySession(sess);
+			});
+		
+		next();
+	}
 	else {
-		// No session, so discconect and about
 		socket.disconnect();
-		return;
+		winston.debug("Session id does not exist");
+	}
+});
+
+/*
+	Host Socket events
+*/
+io.on('connection', function(socket) {
+	
+	// Update party code and playlist
+	var sess = Session.findBySocket(socket);
+	if(sess) {
+		if(sess.partyCode != null) {
+			socket.emit('updateCode', { partyCode : sess.partyCode });
+			socket.emit('updatePlaylist', sess.playList);
+		}
 	}
 
 	/******************
@@ -738,65 +891,149 @@ io.on('connection', function(socket, handshakeData) {
 	*******************/
 
 	socket.on('ban', function(data) {
-		// TODO: Add findSession by socket
 		winston.debug("ban: " + data.ip);
 		var sess = Sessions.findBySocket(socket);
 		if(sess) {
 			var ip = data.ip;
 
-			session.banUser(ip);
-			socket.emit('updatePlaylist', JSON.stringify(list))
+			sess.banUser(ip);
+			socket.emit('updateBanList', this.banned);
 		}
 	});
 
 	socket.on('unban', function(data) {
-		// TODO: Add findSession by socket
-		var ip = data.ip;
+		winston.debug("unban: " + data.ip);
+		var sess = Sessions.findBySocket(socket);
+		if(sess) {
+			var ip = data.ip;
 
-		session.unBanUser(ip);
+			sess.unBanUser(ip);
+			socket.emit('updateBanList', this.banned);
+		}
 	});
 
 	socket.on('getBanList', function(data) {
-		// TODO: Add findSession by socket
-		var list = [];
-		for(var i=0; i < session.banned.length; i++) {
-			if(session.banned[i] != undefined) {
-				list.push(session.banned[i].ip);
-			}
+		winston.debug("request ban list");
+		var sess = Sessions.findBySocket(socket);
+
+		if(sess) {
+			socket.emit('updateBanList', this.banned);
 		}
-		socket.emit('updateBanList', JSON.stringify(list));
 	});
 
 	socket.on('changeCode', function(data) {
-		// TODO: Add findSession by socket
-		var code = session.newPartyCode();
-		session.partyCode = code;
+		winston.debug("request code change");
+		var sess = Sessions.findBySocket(socket);
 
-		var out = { partyCode : code };
-		socket.emit('updateCode', JSON.stringify(out));
+		if(sess) {
+			var code = sess.newPartyCode();
+			sess.partyCode = code;
+			winston.debug("new code: " + code);
+
+			var out = { partyCode : code };
+			socket.emit('updateCode', out);
+		}
 	});
 
 	socket.on('removeSong', function(data) {
-		// TODO: Add findSession by sockets
+		var sess = Sessions.findBySocket(socket);
 		var trackId = data.trackId;
+		winston.debug("remove song: " + trackId);
 
-		// Oo remove
+		if(sess) {
+			sess.removeSong(trackId);
+			socket.emit('updatePlaylist', sess.playList);
+		}
 	});
+
+	/*
+		Get the user's playlists
+
+		Returns:
+			[
+				{
+					name: string - playlist name,
+					id: string - playlist id
+				}
+			]
+	*/
 	socket.on('getPlaylists', function(data) {
 		var sess = Sessions.findBySocket(socket);
-		if(!sess) { /* error */}
 
-		// Request playlists of use
-		// Parse playlist
-		// Emit list names
-		socket.emit('updateLists', JSON.stringify(out));
+		if(sess) { 
+			if(!sess.tokens) throw new Error("No tokens, cannot get playlists");
+
+			// Request playlists of user
+			sess.verifyFreshTokens()
+				.then(function() {
+					spotify.getHostsPlaylists(sess.tokens, CLIENT_ID, CLIENT_SECRET)
+						.then(function(ok, data) {
+							if(ok) {
+								var playlists = data.playlists;
+								var out = {
+									code : 200,
+									playlists : playlists
+								};
+
+								winston.debug("getPlaylists: sending: ", out)
+								socket.emit('updateLists', out);
+							}
+							else {
+								winston.error("getPlaylists: getHostsPlaylists resolved but status is false: ", data);
+							}
+
+						})
+						.catch(function(status, data) {
+							winston.error("getPlaylists: Error in request: ", data);
+						});
+				})
+				.catch(function(status, data) {
+					winston.error("getPlaylists: Error refreshing token: ", data);
+				});
+		}
+		else {
+			/* error */
+		}
 	});
+
 	socket.on('addPlaylist', function(data) {
 		var sess = Sessions.findBySocket(socket);
 		if(!sess) { /* error */ }
-		var listId = data.playlistId;
+		
+		var targetListId = data.playlistId; 
+		winston.debug("addPlaylist: copying playlist: ", targetListId);
 
-		// Fetch play list
+		// Check tokens are fresh
+		sess.verifyFreshTokens()
+			.then(function(ok, data) {
+				if(ok) {
+					// Copy over playlist
+					spotify.copyOverPlaylist(tokens, userId, targetListId, playlistId)
+						.then(function(status, data) {
+							if(status) {
+								sess.playList = data.playlist;
+								var out = {
+									code  : 200,
+									playlist : sess.playList
+								}
+								
+								winston.debug("addPlaylist: sending: ", out);
+								socket.emit('updatePlaylist', out);
+							}
+							else {
+								winston.error("addPlaylist: copyOverPlaylist resolved but status is false: ", data);
+							}
+
+						})
+						.catch(function(status, data) {
+							winston.error("addPlaylist: Error copying playlist over: ", data);
+							// Emit error about copying
+						})
+				}
+				else {
+					winston.error("addPlaylist: Error refreshing token: ", data);
+				}
+		})
 		// Loop adding to current party list
 		// Emit updatePlaylist w/ new list
 		socket.emit('updatePlaylist', JSON.stringify(out));
@@ -804,14 +1041,21 @@ io.on('connection', function(socket, handshakeData) {
 
 	socket.on('updatePowerState', function(data) {
 		var sess = Sessions.findBySocket(socket);
-		if(!sess) { /* error */ }
+		if(!sess) { 
+			winston.error("updatePowerState: Error finding session. socket:", socket);
+			return;
+		}
+
 		var queueEnabled = data.queueEnabled;
+		winston.debug("updatePowerState: Queueing:", sess.queueEnabled, "=>", queueEnabled);
 
 		sess.queueEnabled = queueEnabled;
 		var data = {
+			code: 200,
 			powered : sess.queueEnabled
 		};
 
+		winston.debug("updatePowerState: sending: ", data);
 		socket.emit('updatePowerState', data);
 	});
 
@@ -819,6 +1063,7 @@ io.on('connection', function(socket, handshakeData) {
 		var sess = Sessions.findBySocket(socket);
 		if(!sess) { return; }
 
+		winston.debug("disconnect: host disconnected: ", sess);
 		// Set timeout for turning off queuing on session
 		sess.disableQueueTimer = setTimeout(disableQueueing, SESSION_QUEUING_TIMEOUT);
 		// Set timeout for deleting sessions
@@ -826,8 +1071,54 @@ io.on('connection', function(socket, handshakeData) {
 	});
 });
 
-function doQueue(id, trackId, lastQueue) {
-	console.log(id + ":" + trackId + ":: Added to queue");
+/*
+	Make calls to Spotify to confirm the BroadSpot playlist exists.
+	If it does, do nothing.
+	If not, create the playlist.
+
+	Access Tokens will be refrehed if they have expired.
+
+	Parameters:
+		sess: object - the current session
+	
+	Returns a Promise
+
+	On Success:
+		Resolves promise with 2 paramters.
+			status : boolean set to true
+			playListId : string - the playlist id on sotify
+	On Error:
+		Resolves promise with 2 paramters.
+			status : boolean set to false
+			data : object - contains error data.
+*/
+function initSessionPlaylistOnSpotify(sess) {
+	if(!sess) throw new Error("Session is required");
+	if(!sess.tokens) throw new Error("Session tokens are required");
+	if(!sess.userId) throw new Error("User id is required");
+
+	return new Promise(function(resolve, reject) {
+		sess. verifyFreshTokens()
+			.then(function(ok, data) {
+				if(ok) { 
+					spotify.lookupPlaylistId(sess.tokens, sess.userId, BROADSPOT_PLAYLIST_NAME)
+					.then(function(playlistId) {
+						if(playlistId) { // Return the playlistId
+							resolve(true, playlistId);
+						}
+						else { // Playlist doesn't exist so create it
+							resolve(spotify.createBroadSpotPlaylist(sess.tokens, sess.userId, BROADSPOT_PLAYLIST_NAME));
+						}
+					})
+					.catch(function(status, data) {
+						reject(status, data);
+					});
+				}
+			})
+			.catch(function(status, data) { // Verifying/Refreshing tokens failed
+				reject(status, data);
+			});
+	});
 }
 
 function getState() {
@@ -845,15 +1136,6 @@ function disableQueueing(sess) {
 function deleteSession(sess) {
 	Sessions.destroySession(sess);
 }
-
-errors = {
-	INVALID_PARAMETERS : { code : 400, msg : "Invalid paramters supplied" }
-}
-
-var sess = Sessions.createSession();
-sess.sid = "09876";
-sess.partyCode = "12345";
-Sessions.addSession(sess);
 
 app.listen(PORT);
 winston.info("server listening at: " + HOSTNAME + ":" + PORT);

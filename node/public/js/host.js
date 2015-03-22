@@ -172,12 +172,12 @@ app.controller('hostCtrl', function($scope) {
 	$scope.updateLists = function(data) {
 		$("#listLoading").toggleClass("hidden", true);
 		$scope.$apply(function() {
-			$scope.hostPlaylists = data;
+			$scope.hostPlaylists = data.playlists;
 		});
 	};
 	$scope.updatePlaylist = function(data) {
 		$scope.$apply(function() {
-			$scope.hostPlaylists = data;
+			$scope.playlist = data.playlist;
 		});
 	};
 	$scope.updatePowerState = function(data) {
