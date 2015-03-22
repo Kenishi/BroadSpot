@@ -104,7 +104,7 @@ module.exports = {
 				"Content-Type" : "application/x-www-form-urlencoded",
 				"Accept" : "application/json"
 			}
-		}
+		};
 
 		var client = rest.wrap(mime);
 		client(opts).then(function(response) {
@@ -136,8 +136,7 @@ module.exports = {
 				grant_type : "refresh_token",
 				refresh_token : refresh_token,
 				client_id : client_id,
-				client_secret : client_secret,
-				grant_type : "authorization_code"
+				client_secret : client_secret
 			};
 
 			var opts = {
@@ -148,7 +147,7 @@ module.exports = {
 					"Content-Type" : "application/x-www-form-urlencoded",
 					"Accept" : "application/json"
 				}
-			}
+			};
 
 			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
@@ -270,7 +269,7 @@ module.exports = {
 			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
 				// Feed 100-end on to next
-				resolve(_recurseAddSongs(tokens, userId, playListId, trackUris.slice(100)))
+				resolve(_recurseAddSongs(tokens, userId, playListId, trackUris.slice(100)));
 			})
 			.catch(function(response) {
 				// TODO: May return the remaining songs not added?
@@ -347,7 +346,7 @@ module.exports = {
 						]
 					}
 			*/
-			var removeArray = {}
+			var removeArray = {};
 			removeArray.tracks = trackUris.slice(0,100);
 
 			opts.entity = removeArray;
@@ -361,19 +360,127 @@ module.exports = {
 			.catch(function(response) {
 				var err = new errors.ERROR_REMOVING_TRACKS();
 				err.msg += response.entity;
-				reject(false, )
+				reject(false, err);
 			});
 		});
-	}
+	},
+
+	/**
+		Lookup a playlist's id by its name
+
+		Expects:
+			tokens: object - host's session tokens acquired during authorization
+			userId: string - host's user id
+			playlistName: string - the name of the playlist 
+
+		Returns:
+			A promise that resolves to 2 parameters
+
+		On Success:
+			status: boolean - set to true, EVEN IF PLAYLIST IS NOT FOUND
+			data: object - object contains the result
+				{
+					code : number: 200
+					found: boolean - true/false if the playlist was found
+					id: string - the playlist's id
+				}
+		On Error:
+			status: boolean - set to false
+			data: object - contains the details on the error
+	*/
 
 	lookupPlaylistId : function(tokens, userId, playlistName) {
 		return new Promise(function(resolve, reject) {
-
+			winston.debug("lookupPlaylistId: looking for: ", playlistName);
+			this.getHostsPlaylists(tokens, userId).then(function(status, data) {
+				var playLists = data.playLists;
+				// See if every playlist doesn't equal the name, resolve the one that does & abort
+				var notFound = playLists.every(function(val) {
+					if(val.name != playlistName) {
+						return true;
+					}
+					else {
+						var out = {
+							code : 200,
+							found : true,
+							id : val.id
+						};
+						winston.debug("lookupPlaylistId: found playlist, id:", out.id);
+						resolve(true, out);
+						return false;
+					}
+				});
+				if(notFound) {
+					var out = {
+						code: 200,
+						found : false,
+						id : null
+					};
+					winston.debug("lookupPlaylistId: playlist not found");
+					resolve(true, out);
+				}
+			})
+			.catch(function(status, data) { 
+				reject(status, data); 
+			});
 		});
 	},
-	createBroadSpotPlaylist : function(tokens, userId, playlistName) {
+	/**
+		Create a private playlist on the host's spotify
+
+		Expects:
+			tokens: object - the host's cookies acquired at authorization
+			userId: string - the host's user id
+			playlistNmae: string - the playlst name
+
+		Returns:
+			A Promise that resolves to 2 paramters
+
+		On Success:
+			status: boolean - set to true
+			data: object - object that will contain the playlist id
+				{
+					code: number - 200,
+					id: string - the created playlist's id
+				}
+
+		On Error:
+			status: boolean - set to false
+			data: object - an object containing error data
+	*/
+	createPlaylist : function(tokens, userId, playlistName) {
+		if(!tokens) throw new Error("Host tokens are required to create a playlist");
+		if(!tokens.access_token) throw new Error("Access token is required to create a playlist");
+		if(!userId) throw new Error("Host user id is required to create a playlist");
+		if(!playlistName || typeof playlistName != 'string') throw new Error("A string name for the playlist is required");
+
 		return new Promise(function(resolve, reject) {
-			// Create
+			var postFixPath = "users/{user_id}/playlists".replace("{user_id}", userId);
+			var opts = getStubAPIRequest(tokens.access_token, postFixPath);
+			opts.method = "post";
+			opts.headers["Content-Type"] = "application/json";
+			opts.entity = {
+				name : playlistName,
+				'public' : false
+			};
+
+			winston.debug("createPlaylist: creating playlist, opts: ", opts);
+			var client = rest.wrap(mime);
+			client(opts).then(function(response) {
+				var id = response.entity.id;
+				var out = {
+					code: 200,
+					id: id
+				};
+				winston.debug("createPlaylist: create success, id: ", id);
+				resolve(true, out);
+			})
+			.catch(function(response) {
+				winston.error("createPlaylist: failed to create playlist: ", response.entity);
+				var err = errors.FAILED_CREATE_PLAYLIST();
+				err.msg += response.entity;
+				reject(false, err);
+			});
 		});
 	},
 	/**
@@ -389,10 +496,13 @@ module.exports = {
 					{
 						code: int - should be set to 200
 						playLists: array - array of playlist objects
-							{
-								name: string - name of playlist
-								id: string - id of the playlist
-							}
+							[
+								{
+									name: string - name of playlist
+									id: string - id of the playlist
+								},
+								...
+							]
 					}
 	*/
 	getHostsPlaylists : function(tokens, userId) {
@@ -614,7 +724,7 @@ function extractTracksFromGetPlayListTracks(respData) {
 }
 
 function buildShowDlgParam(doShow) {
-	if(doShow == undefined || doShow == null) throw new Error("show_dialog cannot be null or undefined");
+	if(doShow === undefined || doShow === null) throw new Error("show_dialog cannot be null or undefined");
 	return encodeURI("&show_dialog=" + doShow.toString());
 }
 
