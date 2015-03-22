@@ -118,7 +118,7 @@ var Sessions = {
 		return sess;
 	},
 	getSession : function(sess) {
-		var out = undefined;
+		var out = null;
 		this.sessions.every(function(val) {
 			if(val.sid == sess.sid) {
 				out = val;
@@ -226,13 +226,13 @@ function Session() {
 
 	this.disableQueueTimer = null; // Timer ID for disabling queuing
 	this.deleteSessionTimer = null; // Timer ID for deleting this session
-};
+}
 
 Session.prototype.toString = function() {
 	var out = "Sid: " + this.sid + "; CreateTime: " + this.createTime.toString() + "; SIP: " + this.sessionIP +
 		"; PartyCode: " + this.partyCode;
 	return out;
-}
+};
 
 /* Is user in the banned list? */
 Session.prototype.isBanned = function(ip) {
@@ -355,7 +355,7 @@ Session.prototype.addTrack = function(ip, trackUri) {
 	// Determine where to insert the track
 	// Add track to server side playlist
 	// Add track to spotify playlist
-}
+};
 
 /*
 	Remove all songs added by IP
@@ -377,7 +377,7 @@ Session.prototype.removeSongsByIp = function(ip, callback) {
 
 	spotify.removeSongs(this.tokens, this.userId, this.playlistId, removeList)
 		.then(callback).catch(callback);
-}
+};
 
 /*
 	Generates a new party code but doesn't update
@@ -422,7 +422,7 @@ Session.prototype.clearTimers = function() {
 		this.deleteTimer = null;
 		// LOG CLEARED DELETE TIMER (info)
 	}
-}
+};
 
 /*
 	Verify access_token has not expired and refresh if
@@ -459,11 +459,11 @@ Session.prototype.verifyFreshTokens = function() {
 			resolve(true, { code: 200, msg: "tokens ok. not refreshed."});
 		}
 	});
-}
+};
 
 Session.prototype.doQueue = function(ip, trackId, lastQueue) {
 	winston.debug(this.partyCode, ":", ip, ":", trackId, ":: Added to queue");
-}
+};
 
 
 
@@ -664,14 +664,14 @@ function checkSid(req, res, next) {
 	try {
 		winston.log("debug", "Cookies: ", req.cookies);
 		sid = req.cookies.sid;
-	} catch(e) { sid = undefined }
+	} catch(e) { sid = undefined; }
 
 	if(typeof sid == 'undefined') {
 		winston.debug("/host: no sid in cookie, go to login");
 		showLogin(req, res, next);
 	}
 	else { // Sid exists, confirm session
-		winston.debug("/host: found sid")
+		winston.debug("/host: found sid");
 		req.sid = sid;
 		next();
 	}	
@@ -761,7 +761,7 @@ function hostAuthOk(req, res, next) {
 				refresh_token : data.refresh_token,
 				expires_in : data.expires_in,
 				expires_at : data.expires_at
-			}
+			};
 			var ses = createSession(req, res, tokens);
 			Sessions.addSession(ses);
 
@@ -883,7 +883,7 @@ io.on('connection', function(socket) {
 	// Update party code and playlist
 	var sess = Session.findBySocket(socket);
 	if(sess) {
-		if(sess.partyCode != null) {
+		if(sess.partyCode) {
 			socket.emit('updateCode', { partyCode : sess.partyCode });
 			socket.emit('updatePlaylist', sess.playList);
 		}
@@ -978,7 +978,7 @@ io.on('connection', function(socket) {
 									playlists : playlists
 								};
 
-								winston.debug("getPlaylists: sending: ", out)
+								winston.debug("getPlaylists: sending: ", out);
 								socket.emit('updateLists', out);
 							}
 							else {
@@ -1018,7 +1018,7 @@ io.on('connection', function(socket) {
 								var out = {
 									code  : 200,
 									playlist : sess.playList
-								}
+								};
 								
 								winston.debug("addPlaylist: sending: ", out);
 								socket.emit('updatePlaylist', out);
@@ -1031,12 +1031,12 @@ io.on('connection', function(socket) {
 						.catch(function(status, data) {
 							winston.error("addPlaylist: Error copying playlist over: ", data);
 							// Emit error about copying
-						})
+						});
 				}
 				else {
 					winston.error("addPlaylist: Error refreshing token: ", data);
 				}
-		})
+		});
 		// Loop adding to current party list
 		// Emit updatePlaylist w/ new list
 		socket.emit('updatePlaylist', JSON.stringify(out));
@@ -1054,7 +1054,7 @@ io.on('connection', function(socket) {
 
 		sess.queueEnabled = queueEnabled;
 		var data = {
-			code: 200,
+			code : 200,
 			powered : sess.queueEnabled
 		};
 
