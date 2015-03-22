@@ -22,6 +22,14 @@ var errors = {
 	INVALID_PARAMETERS : function() {
 		this.code=6;
 		this.msg="Invalid paramteres supplied";
+	},
+	ERROR_ADDING_TRACKS : function() {
+		this.code=7;
+		this.msg="An error occured while adding tracks. Response data: ";
+	},
+	ERROR_REMOVING_TRACKS : function() {
+		this.code=8;
+		this.msg="An error occured while removing tracks. Response data: ";
 	}
 }
 

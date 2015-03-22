@@ -245,9 +245,15 @@ module.exports = {
 		if(!userId) throw new Error("User ID is required to remove songs");
 		if(!playlistId) throw new Error("Playlist ID required to remove songs");
 		if(!trackUris) throw new Error("Track URIs are required to remove songs");
+
+		return new Promise(function(resolve, reject) {
+			resolve(_recurseAddSongs(tokens, userId, playListId, trackUris));
+		});
 	},
 	_recurseAddSongs : function(tokens, userId, playListId, trackUris) {
 		return new Promise(function(resolve, reject) {
+			if(trackUris.length <= 0) resolve(true, {code:200, msg: "Success"});
+
 			var postFixPath = "users/{user_id}/playlists/{playlist_id}/tracks"
 				.replace("{user_id}", userId)
 				.replace("{playlist_id}", playListId);
@@ -256,6 +262,24 @@ module.exports = {
 			opts.method = 'post';
 			opts.headers["Content-Type"] = "application/json";
 
+			// Slice first 0-99
+			var tracksToAdd = track.slice(0,100);
+			opts.entity = { uris : tracksToAdd };
+			winston.debug("_recurseAddSongs: rest options: ", opts);
+
+			var client = rest.wrap(mime);
+			client(opts).then(function(response) {
+				// Feed 100-end on to next
+				resolve(_recurseAddSongs(tokens, userId, playListId, trackUris.slice(100)))
+			})
+			.catch(function(response) {
+				// TODO: May return the remaining songs not added?
+
+				var err = new errors.ERROR_ADDING_TRACKS();
+				err.msg += response.entity;
+				winston.error("_recurseAddSongs: error adding: ", response.entity);
+				reject(false, err);
+			});
 		});
 	},
 
@@ -269,54 +293,78 @@ module.exports = {
 			userId:string - the user id (NOT Spotify URI)
 			playlistId:string - the playlist id to remove the songs from (NOT Spotify URI)
 			trackUris:array - an array of objects containing track URIs
-				Format : {
-					'trakcs' : [
+				Format : [
 						{'uri' : <spotify track URI>},
 						{'uri' : <spotify track URI>}, ...
 					]
-				}
-			callback - (optional) a callback on completion
-				Parameters:
-					success:boolean - success or fail
-					data:object | string - result data
+		Returns:
+			A Promise that resolves to 2 parameters
 
 			On Success:
-				Callback is called with success set to True.
-				Data will be an object: { code: 200, msg: "success" }
+				status: boolean - set to true
+				data: object: 
+					{
+						code: number - 200
+						msg: string - "success"
+					}
 
 			On Error:
-				Callback is called with success set to False.
-				Data will be the data returned by the connection, this may
-				be a string or an object.
+				status: boolean - set to false
+				data: object: - will contain the error data
+
 	**/
-	removeSongs : function(tokens, userId, playlistId, trackUris, callback) {
+	removeSongs : function(tokens, userId, playlistId, trackUris) {
 		if(!tokens) throw new Error("Tokens required to remove songs");
 		if(!tokens.access_token) throw new Error("Access token required to remove songs");
 		if(!userId) throw new Error("User ID is required to remove songs");
 		if(!playlistId) throw new Error("Playlist ID required to remove songs");
 		if(!trackUris) throw new Error("Track URIs are required to remove songs");
-		if(trackUris.length > 100) throw new Error("You can only remove 100 songs or less in one request");
-		if(callback && typeof callback != 'function') throw new Error("Callback must be a function");
 
-		var	path_postfix = "users/{uID}/playlists/{pID}/tracks"
-							.replace("{uID}", userId)
-							.replace("{pID}", playlistId);
-
-		var opts = getStubAPIRequest(tokens.access_token, path_postfix);
-		opts.method = "delete";
-		opts.headers["Content-Type"] = 'application/json';
-		opts.entity = trackUris;
-
-		var client = rest.wrap(mime);
-		client(opts).then(function(response) {
-			if(response.status.code==200) {
-				callback(true, {code:200, msg:"success"});
-			}
-		})
-		.catch(function(response) {
-			callback(false, response.entity);
+		return new Promise(function(resolve) {
+			resolve(this._recurseRemoveSongs(tokens, userId, playListId, tracksUris));
 		});
 	},
+	_recurseRemoveSongs : function(tokens, userId, playListId, trackUris) {
+		return new Promise(function(resolve, reject) {
+			if(trackUris.length <= 0) resolve(true, {code:200, msg: "success"});
+
+			var	path_postfix = "users/{uID}/playlists/{pID}/tracks"
+								.replace("{uID}", userId)
+								.replace("{pID}", playlistId);
+
+			var opts = getStubAPIRequest(tokens.access_token, path_postfix);
+			opts.method = "delete";
+			opts.headers["Content-Type"] = 'application/json';
+			
+			/*
+				Note: Spotify expects the body to be a JSON in a format
+				different then how the track uris are passed into the 
+				functions. Spotify expects: 
+					{
+						'tracks' : [
+							{ 'uri' : <spotify track uri> },
+							...
+						]
+					}
+			*/
+			var removeArray = {}
+			removeArray.tracks = trackUris.slice(0,100);
+
+			opts.entity = removeArray;
+
+			var client = rest.wrap(mime);
+			client(opts).then(function(response) {
+				if(response.status.code==200) {
+					resolve(this._recurseRemoveSongs(tokens, userId, playListId, trackUris.slice(100)));
+				}
+			})
+			.catch(function(response) {
+				var err = new errors.ERROR_REMOVING_TRACKS();
+				err.msg += response.entity;
+				reject(false, )
+			});
+		});
+	}
 
 	lookupPlaylistId : function(tokens, userId, playlistName) {
 		return new Promise(function(resolve, reject) {
@@ -495,17 +543,22 @@ module.exports = {
 
 	},
 	copyOverPlaylist : function(tokens, userId, targetListId, playlistId) {
-		// Get Playlist Tracks
-		winston.debug("copyOverPlaylist: getting target playlist tracks, id:", targetListId);
-		this.getPlaylistTracks(tokens, userId, targetListId)
-			.then(function(status, data) {
-				var tracks = data;
-
-
-			})
-			.catch(function(status, err) {
-
-			});
+		return new Promise(function(resolve, reject) {
+			// Get Playlist Tracks
+			winston.debug("copyOverPlaylist: getting target playlist tracks, id:", targetListId);
+			this.getPlaylistTracks(tokens, userId, targetListId)
+				.then(function(status, data) {
+					var tracks = data;
+					var addArray = tracks.map(function(val) {
+						return val.uri;
+					});
+					resolve(this.addSongs(tokens, userId, playListId, addArray));
+				})
+				.catch(function(status, err) {
+					winston.error("copyOverPlaylist: error getting target playlist: ", err);
+					reject(false, err);
+				});
+		});
 	},
 
 	TokenExpiredError : "error: token_expired"

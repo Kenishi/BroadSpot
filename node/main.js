@@ -361,19 +361,22 @@ Session.prototype.addTrack = function(ip, trackUri) {
 	Remove all songs added by IP
 
 	ip: string - ip of the user
+	callback: function - (optional) callback function on completion/fail
 */
 Session.prototype.removeSongsByIp = function(ip, callback) {
-	if(!callback || typeof callback != 'function') throw new Error("Callback must be a function");
+	if(callback && typeof callback != 'function') throw new Error("Callback must be a function");
 
 	var removeList = [];
 	this.playList = this.playList.filter(function(val) {
 		if(val.ip == ip) {
-			removeList.push(val);
+			removeList.push({uri : val.trackUri});
 			return false;
 		}
 		return true;
 	});
-	spotify.removeSongs(this.tokens, this.userId, this.playlistId, removeList, callback);
+
+	spotify.removeSongs(this.tokens, this.userId, this.playlistId, removeList)
+		.then(callback).catch(callback);
 }
 
 /*
