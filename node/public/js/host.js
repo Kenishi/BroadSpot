@@ -19,10 +19,13 @@ app.controller('hostCtrl', function($scope) {
 	};
 
 	$scope.connect = function() {
-		window.socket = io('/', $.cookie("sid"));
+		window.socket = io('//');
 		window.socket.on('connect_error', function(data) {
-			console.log("Connection error: " + data);
-			window.location = '/host';
+			console.log("Connection error: ");
+			console.log(data);
+			if(data.description === 404) {
+				window.socket = null;
+			}
 		});
 
 		window.socket.on('updateBanList', $scope.updateBanList);
