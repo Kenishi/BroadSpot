@@ -34,8 +34,12 @@ var errors = {
 	FAILED_CREATE_PLAYLIST : function() {
 		this.code = 9;
 		this.msg="Failed to create playlist. Response data: ";
+	},
+	SOCKET_NOT_CONNECTED : function() {
+		this.code = 10;
+		this.msg="Action could not be completed, session socket not connected.";
 	}
-}
+};
 
 // For node.js
 module.exports = errors;
