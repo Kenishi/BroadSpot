@@ -1,22 +1,24 @@
 /*
-	Left off at:
-	Getting the socket events working. Many events needs to have a "findBySocket"
-	added to get the session to be able to do anything.
+	Massive scoping problems inside spotify.js
 
-	Rework spotify calls to be Promise based. It fits in better with the way the
-	REST library already currently works.
+	Many of the functions tend to make calls to other module functions to complete
+	their actions.
+
+	These functions are not visible from inside the Promise().
+
+	Note: need to remove self. references in spotify module. They didn't solvve the scope
+	issue.
+*/
+/*
+	Left off at:
 
 	Debug logs need to be added to confirm that the server-client connection is working
-
-	Remove the test session from bottom.
 
 	Remove the test code in the host_control
 
 	Add an emit.changeCode so host can get his party code
 
 	Clean up logging code a little bit
-
-	FIX the redirect after auth finishes, it gets stuck on the page
 */
 
 /*
@@ -45,6 +47,7 @@
 		* Move token based operations into Session prototype
 		* Move the /party search functionallity into spotify.js
 		* Refactor getPlaylists emit event => getHostsPlaylists in frontend and backend
+		* Add a connected indicator on the navbar of the host control
 */
 
 var fs = require('fs'),
@@ -53,10 +56,12 @@ var fs = require('fs'),
 
 	winston = require('winston'),
 	express = require('express'),
+	http = require('http'),
 	bodyParser = require('body-parser'),
 	rest = require('rest'),
 	mime = require('rest/interceptor/mime'),
 	cookieParser = require('cookie-parser'),
+	socketCookieParser = require('socket.io-cookie'),
 	cookieSession = require('cookie-sessions'),
 	uuid = require('node-uuid'),
 
@@ -66,21 +71,25 @@ var fs = require('fs'),
 
 winston.level = 'input';
 winston.cli();
+
+var PORT = process.env.PORT || 3000;
+var HOSTNAME = os.hostname();
+
 var app = express();
-var server = require('http').createServer(app);
-var io = require('socket.io')(server);
+var server = http.createServer(app).listen(PORT);
+var io = require('socket.io').listen(server);
 
 var CLIENT_ID = spotify_keys.CLIENT_ID;
 var CLIENT_SECRET = spotify_keys.CLIENT_SECRET;
 
-var PORT = process.env.PORT || 3000;
-var HOSTNAME = os.hostname();
 var AUTH_REDIRECT_URL = "http://" + HOSTNAME + ":" + PORT + "/host/auth";
 var MAX_RESULTS = 30;
 var AUTH_STATE = uuid.v4().replace(/-/g,'');
 
 var SESSION_QUEUING_TIMEOUT = 3600 * 1000; // Queuing is disabled after 1 hour of no host
 var SESSION_DELETE_TIMEOUT = (3600 * 24) * 1000; // Session is removed after a day of no reconnect
+
+var BROADSPOT_PLAYLIST_NAME = "My BroadSpot Playlist";
 
 /* All current running sessions */
 var Sessions = {
@@ -473,19 +482,26 @@ Session.prototype.clearTimers = function() {
 */
 Session.prototype.verifyFreshTokens = function() {
 	if(!this.tokens) throw new Error("Session tokens are required");
-
+	
+	var sess = this;
 	return new Promise(function(resolve, reject) {
-		var hasExpired = this.tokens.expires_at - Date.now();
+		winston.debug("verifyFreshTokens: checking if tokens are expired");
+		debugger;
+		var hasExpired = sess.tokens.expires_at - Date.now();
 		if(hasExpired) {
-			spotify.refreshTokens(this.tokens.refresh_token, CLIENT_ID, CLIENT_SECRET)
+			winston.debug("verifyFreshTokens: tokens have expired, refresh");
+			spotify.refreshTokens(sess.tokens.refresh_token, CLIENT_ID, CLIENT_SECRET)
 			.then(function(ok, data) {
+				winston.debug("verifyFreshTokens: tokens refreshed");
 				resolve(true, { code: 200, msg: "tokens ok. refreshed."});
 			})
 			.catch(function(ok, data) {
+				winston.debug("verifyFreshTokens: failed to refresh tokens");
 				reject(ok, data);
 			});
 		}
 		else {
+			winston.debug("verifyFreshTokens: tokens ok, not refreshed");
 			resolve(true, { code: 200, msg: "tokens ok. not refreshed."});
 		}
 	});
@@ -762,9 +778,12 @@ function checkSid(req, res, next) {
 	var sid;
 	winston.debug("/host: checking sid");
 	try {
-		winston.deubg("Cookies: ", req.cookies);
+		winston.debug("Cookies: ", req.cookies);
 		sid = req.cookies.sid;
-	} catch(e) { sid = undefined; }
+	} catch(e) { 
+		winston.error("/host: error occured getting cookie: ", e);
+		sid = undefined; 
+	}
 
 	if(typeof sid == 'undefined') {
 		winston.debug("/host: no sid in cookie, go to login");
@@ -927,9 +946,12 @@ app.post('/host/auth', function(req, res) {
 	Note: If the IP of host does not match the one in the session
 		the SID points too, the connection will abort.
 */
+io.use(socketCookieParser);
 io.use(function(socket, next) {	
 	winston.info("socketAuth: socket connected: ", socket.request.connection.remoteAddress);
-	var sid = socket.request;
+	var sid;
+	sid = socket.request.headers.cookie.sid;
+	winston.debug("socketAuth: socket sid: ", sid);
 	
 	var sess = Sessions.findBySid(sid);
 	if(sess) {
@@ -965,13 +987,13 @@ io.use(function(socket, next) {
 					winston.debug("socketAuth: got playlist id: ", playListId);
 				}
 				else {
-					winston.error("Unexpected return in init playlist. playlistId: ", playlistId);
+					winston.error("socketAuth: Unexpected return in init playlist. playlistId: ", playlistId);
 					socket.disconnect();
 					Sessions.destroySession(sess);
 				}
 			})
 			.catch(function(ok, data) {
-				winston.error("Error init host playlist: ", data);
+				winston.error("socketAuth: Error init host playlist: ", data);
 				socket.disconnect();
 				Sessions.destroySession(sess);
 			});
@@ -980,7 +1002,7 @@ io.use(function(socket, next) {
 	}
 	else {
 		socket.disconnect();
-		winston.debug("Session id does not exist");
+		winston.debug("socketAuth: Session id does not exist");
 	}
 });
 
@@ -990,7 +1012,7 @@ io.use(function(socket, next) {
 io.on('connection', function(socket) {
 	
 	// Update party code and playlist
-	var sess = Session.findBySocket(socket);
+	var sess = Sessions.findBySocket(socket);
 	if(sess) {
 		if(sess.partyCode) {
 			socket.emit('updateCode', { partyCode : sess.partyCode });
@@ -1179,7 +1201,7 @@ io.on('connection', function(socket) {
 		var sess = Sessions.findBySocket(socket);
 		if(!sess) { return; }
 
-		winston.debug("disconnect: host disconnected: ", sess);
+		winston.debug("disconnect: host disconnected: ", sess.toString());
 		// Set timeout for turning off queuing on session
 		sess.disableQueueTimer = setTimeout(disableQueueing, SESSION_QUEUING_TIMEOUT);
 		// Set timeout for deleting sessions
@@ -1214,16 +1236,25 @@ function initSessionPlaylistOnSpotify(sess) {
 	if(!sess.userId) throw new Error("User id is required");
 
 	return new Promise(function(resolve, reject) {
-		sess. verifyFreshTokens()
+		winston.debug("initSessionPl: verify fresh tokens");
+		sess.verifyFreshTokens()
 			.then(function(ok, data) {
 				if(ok) { 
+					winston.debug("initSessionPl: tokens are fresh");
+					winston.debug("initSessionPl: lookup broadspot playlist");
 					spotify.lookupPlaylistId(sess.tokens, sess.userId, BROADSPOT_PLAYLIST_NAME)
 					.then(function(playlistId) {
 						if(playlistId) { // Return the playlistId
-							resolve(true, playlistId);
+							winston.debug("initSessionPl: broadspot playlist found, returning id: ", playListId);
+							var out = {
+								code: 200,
+								id : playlistId
+							};
+							resolve(true, out);
 						}
 						else { // Playlist doesn't exist so create it
-							resolve(spotify.createBroadSpotPlaylist(sess.tokens, sess.userId, BROADSPOT_PLAYLIST_NAME));
+							winston.debug("initSessionPl: broadspot playlist not found, creating");
+							resolve(spotify.createPlaylist(sess.tokens, sess.userId, BROADSPOT_PLAYLIST_NAME));
 						}
 					})
 					.catch(function(status, data) {
@@ -1253,5 +1284,4 @@ function deleteSession(sess) {
 	Sessions.destroySession(sess);
 }
 
-app.listen(PORT);
-winston.info("server listening at: " + HOSTNAME + ":" + PORT);
+winston.info("ready: server listening at: " + HOSTNAME + ":" + PORT);
