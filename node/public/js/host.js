@@ -19,7 +19,6 @@ app.controller('hostCtrl', function($scope) {
 	};
 
 	$scope.connect = function() {
-		$.cookie("sid", "09876"); // Test cookie
 		window.socket = io('/', $.cookie("sid"));
 		window.socket.on('connect_error', function(data) {
 			console.log("Connection error: " + data);
@@ -80,7 +79,7 @@ app.controller('hostCtrl', function($scope) {
 
 	$scope.showChangeCode = function() {
 		$("#changeCodeModal").modal();
-	}
+	};
 
 	// Toggle power is in "Admin Button Triggered actions"
 
@@ -126,7 +125,7 @@ app.controller('hostCtrl', function($scope) {
 			partyCode : Math.floor(1+Math.random()*1000000).toString()
 		};
 		setTimeout(function() { $scope.updateCode(data); }, 2000);
-	}
+	};
 
 	/*****************************
 		Playlist Triggered Actions
@@ -192,7 +191,7 @@ app.controller('hostCtrl', function($scope) {
 
 	$scope.reconnected = function() {
 		$("#reconnectModal").modal('hide');
-	}
+	};
 });
 
 function ipMouseOver(event) {
@@ -204,5 +203,5 @@ function ipMouseOut(event) {
 }
 
 window.onload = function() {
-	//angular.element("body").scope().connect();
+	angular.element("body").scope().connect();
 };
