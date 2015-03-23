@@ -10,6 +10,7 @@ winston.cli();
 winston.level = 'input';
 
 module.exports = {
+	self : this,
 
 	// function authorizeURL(client_id, redirect_uri, opts)
 	// function getTokens(code, redirect_uri, client_id, client_secret, callback)
@@ -200,12 +201,15 @@ module.exports = {
 			var opts = getStubAPIRequest(tokens.access_token, "me");
 			opts.method = "get";
 
+			winston.debug("queryUserInfo: requesting profile, opts: ", opts);
 			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
 				var data = response.entity;
+				winston.debug("queryUserInfo: profile received:", data);
 				callback(true, data);
 			})
 			.catch(function(errorData) {
+				winston.debug("queryUserInfo: failed to get profile: ", errorData);
 				callback(false, errorData);
 			});
 		}
@@ -376,7 +380,7 @@ module.exports = {
 		if(!trackUris) throw new Error("Track URIs are required to remove songs");
 
 		return new Promise(function(resolve) {
-			resolve(this._recurseRemoveSongs(tokens, userId, playListId, tracksUris));
+			resolve(self._recurseRemoveSongs(tokens, userId, playListId, tracksUris));
 		});
 	},
 	_recurseRemoveSongs : function(tokens, userId, playListId, trackUris) {
@@ -410,7 +414,7 @@ module.exports = {
 			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
 				if(response.status.code==200) {
-					resolve(this._recurseRemoveSongs(tokens, userId, playListId, trackUris.slice(100)));
+					resolve(self._recurseRemoveSongs(tokens, userId, playListId, trackUris.slice(100)));
 				}
 			})
 			.catch(function(response) {
@@ -448,7 +452,7 @@ module.exports = {
 	lookupPlaylistId : function(tokens, userId, playlistName) {
 		return new Promise(function(resolve, reject) {
 			winston.debug("lookupPlaylistId: looking for: ", playlistName);
-			this.getHostsPlaylists(tokens, userId).then(function(status, data) {
+			self.getHostsPlaylists(tokens, userId).then(function(status, data) {
 				var playLists = data.playLists;
 				// See if every playlist doesn't equal the name, resolve the one that does & abort
 				var notFound = playLists.every(function(val) {
@@ -562,29 +566,32 @@ module.exports = {
 					}
 	*/
 	getHostsPlaylists : function(tokens, userId) {
+		winston.debug("getHostsPlaylists: enter");
 		if(!tokens) throw new Error("Tokens are required to retrieve playlists");
 		if(!tokens.access_token) throw new Error("Access token is required to retrieve playlists");
-		if(!userid) throw new Error("The host user id is required to retrieve playlists");
+		if(!userId) throw new Error("The host user id is required to retrieve playlists");
 
+		winston.debug("getHostsPlaylists: getting host playlists");
 		return new Promise(function(resolve, reject) {
 			var postFixPath = "users/{1}/playlists".replace("{1}", userId);
 			var opts = getStubAPIRequest(tokens.access_token, postFixPath);
 			
-			resolve(this._recurseGetPlaylists(tokens, userId, opts.path));
+			winston.debug("getHostsPlaylists: entering recursive call")
+			resolve(self._recurseGetPlaylists(tokens, userId, opts.path));
 		});
 	},
 	_recurseGetPlaylists : function(tokens, userId, url, curPlaylists) {
 		if(!curPlaylists) curPlaylists = [];
 		return new Promise(function(resolve, reject) {
 			// Set up request options
+			winston.debug("_recurseGetPlaylists: get stub");
 			var opts = getStubAPIRequest(tokens.access_token, "");
 			opts.path = url;
 			opts.method = 'get';
 			opts.headers["Accept"] = 'application/json';
 
-			var client = rest.wrap(mime);
 			winston.debug("spotify: get playlists: request:", opts);
-
+			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
 				// Grab all the names and IDs on this page
 				var data = response.entity;
@@ -661,7 +668,7 @@ module.exports = {
 		var stub = getStubAPIRequest(tokens.access_token, postFixPath);
 		var url = stub.path;
 		return new Promise(function(resolve, reject) {
-			resolve(this._recurseGetPlaylistTracks(tokens, userId, playListId, url));
+			resolve(self._recurseGetPlaylistTracks(tokens, userId, playListId, url));
 		});
 	},
 	_recurseGetPlaylistTracks : function(tokens, userId, playListId, url, tracksList) {
@@ -691,7 +698,7 @@ module.exports = {
 				// See if there are more tracks
 				if(results.next) {
 					winston.debug("_recurseGetPlaylistTracks: next page: ", results.next);
-					resolve(this._recurseGetPlaylistTracks(tokens, userId, playListId, results.next, tracksList));
+					resolve(self._recurseGetPlaylistTracks(tokens, userId, playListId, results.next, tracksList));
 				}
 				else {
 					var out = {
@@ -714,13 +721,13 @@ module.exports = {
 		return new Promise(function(resolve, reject) {
 			// Get Playlist Tracks
 			winston.debug("copyOverPlaylist: getting target playlist tracks, id:", targetListId);
-			this.getPlaylistTracks(tokens, userId, targetListId)
+			self.getPlaylistTracks(tokens, userId, targetListId)
 				.then(function(status, data) {
 					var tracks = data;
 					var addArray = tracks.map(function(val) {
 						return val.uri;
 					});
-					resolve(this.addSongs(tokens, userId, playListId, addArray));
+					resolve(self.addSongs(tokens, userId, playListId, addArray));
 				})
 				.catch(function(status, err) {
 					winston.error("copyOverPlaylist: error getting target playlist: ", err);
@@ -756,9 +763,9 @@ var authorize_url = {
 function getStubAPIRequest(access_token, path_postfix) {
 	return {
 		method : null,
-		path : "https://" + api_url.domain + api_url.path,
+		path : "https://" + api_url.domain + api_url.path + path_postfix,
 		headers : {
-			"Authorization" : "Bearer " + tokens.access_token
+			"Authorization" : "Bearer " + access_token
 		}
 	};
 }
