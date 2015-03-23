@@ -1,20 +1,4 @@
 /*
-	Left off working on copyOverPlaylists call in Spotify lib.
-
-	Was working on getting the addSongs function working so copyOver
-	could simply use that, and doQueue() in Session can use it as well.
-
-	The current problem is figuring a nice way to chunk large track lists
-	up and execute them recursively with the _recurseAddSongs call.
-
-	LookupPlayListId and CreateBroadSpotPlaylist still need to be completed
-	within the Spotify lib.
-
-	!!!! ALSO, find where spotify.refreshToken() is used in the code
-	and update it for the new Promise implementation.
-*/
-
-/*
 	Left off at:
 	Getting the socket events working. Many events needs to have a "findBySocket"
 	added to get the session to be able to do anything.
@@ -42,6 +26,8 @@
 				Of Note: hostAuthResult and checkSid/verifySession
 		* Refactor/Split out routes into their seperate file. Host is quite large,
 			especially when factoring in the Socket.io commands.
+		* Fix addSong in Session so it moves songs ahead in queue if already there.
+		* Work out a method 
 
 		* Set up production logging
 		* Need to look into what happens if a song not available in a hosts region
@@ -208,6 +194,9 @@ function Session() {
 		{
 			ip: string - ip of the user who queued it
 			trackUri: string - spotify URI of the track
+			name: strin - track name
+			artist: string - track artist name
+			album: string - album name
 		}
 	*/
 	this.playList = [];
@@ -309,6 +298,25 @@ Session.prototype.addUser = function(ip) {
 	return !exists;
 };
 
+/**
+	Find a user by their ip
+
+	Expects:
+		ip: string - the ip of the user
+
+	Returns:
+		the user object if found.
+		null if the user is not found
+*/
+Session.prototype.findUserByIp = function(ip) {
+	if(!ip) throw new Error("IP is required to find a user");
+
+	var users = userList.filter(function(user) {
+		return user.ip == ip;
+	});
+	return users.length > 0 ? users[0] : null;
+};
+
 /*
 	Get the last time the ip queued a song.
 
@@ -349,12 +357,31 @@ Session.prototype.addTrack = function(ip, trackUri) {
 	if(!ip) throw new Error("IP of user adding the track is required");
 	if(!trackUri) throw new Error("Track URI is required to add to the playlist");
 
-	// Get session
-	// Get lookup user
-	// Get queue time
-	// Determine where to insert the track
-	// Add track to server side playlist
-	// Add track to spotify playlist
+	this.refreshPlaylist().then(function(status, data) {
+		this.addUser(ip);
+		var queueTime = this.updateQueueTime(ip);
+		
+		spotify.getTrackInfo(trackUri).then(function(status, data) {
+			var track = data.data;
+			track.ip = ip;
+			track.queueTime = queueTime;
+
+			spotify.addSongs(this.tokens, this.userId, this.playListId, [trackUri])
+				.then(function() {
+					winston.debug("addTrack: track added success: ", trackUri, " by ", ip);
+					this.playList.push(track);
+				})
+				.catch(function(status, err) {
+					winston.debug("addTrack: track failed to add: ", err);
+				});
+		})
+		.catch(function(status, err) {
+			winston.error("addTrack: failed to retrieve track info: ", err);
+		});
+	})
+	.catch(function(status, err) {
+		winston.error("addTrack: refresh playlist failed: ", err);
+	});
 };
 
 /*
@@ -392,7 +419,7 @@ Session.prototype.newPartyCode = function() {
 	return code;
 };
 
-Session.prototype.getPlaylist = function() {
+Session.prototype.getPlaylistId = function() {
 	return this.playlistId;
 };
 
@@ -415,12 +442,12 @@ Session.prototype.clearTimers = function() {
 	if(this.queueTimer) {
 		clearTimeout(this.queueTimer);
 		this.queueTimer = null;
-		// LOG CLEARED QUEUE TIMER (info)
+		winston.info("clearTimers: queue timer was cleared: sid: ", this.sid);
 	}
 	if(this.deleteTimer) {
 		clearTimeout(this.deleteTimer);
 		this.deleteTimer = null;
-		// LOG CLEARED DELETE TIMER (info)
+		winston.info("clearTimers: delete timerw as cleared: sid:", this.sid);
 	}
 };
 
@@ -461,8 +488,78 @@ Session.prototype.verifyFreshTokens = function() {
 	});
 };
 
+/**
+	Refresh the server playlist against the spotify playlist
+
+	Returns:
+		A Promise that resolves to 2 parameters
+	
+		On Success:
+			status: boolean - set to true
+			data: object - result data
+				{
+					code : 200,
+					addedTracks: boolean - True if tracks had to be synced and changed the server-side playlist
+											False otherwise
+				}
+*/
+Session.prototype.refreshPlaylist = function() {
+	if(!this.tokens) throw new Error("Session tokens are not initilized");
+	if(!this.userId) throw new Error("User ID is not initilized");
+	if(!this.playlistId) throw new Error("Playlist ID is not set");
+
+	return new Promise(function(resolve, reject) {
+		var tracksAdded = false;
+
+		winston.debug("refreshPlaylist: verifying tokens");
+		this.verifyFreshTokens().then(function(status, result) {
+			winston.debug("refreshPlaylist: tokens ok, getting playlist");
+			spotify.getPlaylistTracks(this.tokens, this.userId, this.playListId)
+				.then(function(status, data) {
+					winston.debug("refreshPlaylist: processing spotify-side and session-side playlists");
+					var refreshTracks = data.data;
+					refreshTracks.forEach(function(rTrack) {
+						// Add all refreshTracks to the filter array that aren't
+						// in the session playlist
+						if(!playlistContains(rTrack.uri)) {
+							tracksAdded = true;
+							rTrack.ip = null;
+							sess.playList.push(rTrack);
+						}
+					});
+					
+					if(tracksAdded)
+						winston.debug("refreshPlaylist: tracks were synced");
+					else 
+						winston.debug("refreshPlaylist: no tracks needed synced");
+
+					var out = {
+						code : 200,
+						addedTracks: tracksAdded
+					};
+					resolve(true, out);
+				})
+				.catch(reject);
+		});
+	});
+};
+
+Session.prototype.playlistContains = function(trackUri) {
+	/* 
+		Explanation:
+			Every track in the session playlist should NOT
+			equal the supplied URI.
+			If we reach the end of the playlist without finding
+			a match, then every() will return 'true', flip to 'false'
+			to signify "playlist does not contain the uri".
+	*/
+	return !this.playList.every(function(track) {
+		return track.uri != trackUri;
+	});
+};
+
 Session.prototype.doQueue = function(ip, trackId, lastQueue) {
-	winston.debug(this.partyCode, ":", ip, ":", trackId, ":: Added to queue");
+	this.addTrack(ip, trackId);
 };
 
 
@@ -642,10 +739,10 @@ function checkForErrors(req, res, next) {
 	winston.debug("/host: check for errors");
 
 	try {
-		err = res.query.err != undefined ? res.query.err : err;
+		err = res.query.err !== undefined ? res.query.err : err;
 	} catch(e) {}
 
-	if(err == 0) { // No error
+	if(err === 0) { // No error
 		winston.debug("/host: no errors");
 		next(); // Check sids next
 	}
@@ -848,12 +945,16 @@ io.use(function(socket, next) {
 		queueTimer = null;
 		deleteTimer = null;
 
-		// Set up session
+		/*** Set up session ***/
 		sess.socket = socket;
+
+		// Look for playlist and create if needed
 		initSessionPlaylistOnSpotify(sess)
-			.then(function(ok, playlistId) {
+			.then(function(ok, data) {
+				var playlistId = data.id;
 				if(playlistId) {
 					sess.playlistId = playlistId;
+					winston.debug("socket Auth: got playlist id: ", playListId);
 				}
 				else {
 					winston.error("Unexpected return in init playlist. playlistId: ", playlistId);
@@ -887,6 +988,10 @@ io.on('connection', function(socket) {
 			socket.emit('updateCode', { partyCode : sess.partyCode });
 			socket.emit('updatePlaylist', sess.playList);
 		}
+	}
+	else {
+		winston.error("onConnection: session not found by socket");
+		socket.disconnect();
 	}
 
 	/******************
@@ -1053,13 +1158,13 @@ io.on('connection', function(socket) {
 		winston.debug("updatePowerState: Queueing:", sess.queueEnabled, "=>", queueEnabled);
 
 		sess.queueEnabled = queueEnabled;
-		var data = {
+		var out = {
 			code : 200,
 			powered : sess.queueEnabled
 		};
 
-		winston.debug("updatePowerState: sending: ", data);
-		socket.emit('updatePowerState', data);
+		winston.debug("updatePowerState: sending: ", out);
+		socket.emit('updatePowerState', out);
 	});
 
 	socket.on('disconnect', function(data) {
