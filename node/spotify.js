@@ -210,7 +210,68 @@ module.exports = {
 			});
 		}
 	},
+	/**
+		Get a track's info by ID or URI
 
+		Expects:
+			trackUri: string - a spotify URI or the track ID
+
+		Returns
+			A promise that resolves to 2 parameters
+
+		On Success:
+			status: boolean - set to true
+			data: object -
+				{
+					code : 200,
+					data: {
+						title: string - track name
+						artist: string - one artist name
+						album: string - album name
+						uri: string - track spotify uri
+					}
+				}
+		On Error:
+			status: boolean - set to false
+			data: object - error data
+	*/
+	getTrackInfo : function(trackUri) {
+		if(!trackUri) throw new Error("Track ID or URI required");
+		var id = trackUri.replace("spotify:track:", "");
+
+		return new Promise(function(resolve, reject) { 
+			var path = "https://api.spotify.com/v1/tracks/{id}".replace("{id}", id);
+			var opts = {
+				method : 'get',
+				path : path,
+				headers : {
+					'Accept' : 'application/json'
+				}
+			};
+
+			var client = rest.wrap(mime);
+			client(opts).then(function(response) {
+				var track = response.entity;
+				var out = {
+					code : 200,
+					data :	{
+						title: track.name,
+						artist: track.artists[0].name,
+						album: track.album.name,
+						uri: trackUri
+					}
+				};
+				winston.debug("getTrackInfo: get track info success: ", out.data);
+				resolve(true, out);
+			})
+			.catch(function(response) {
+				var err = new errors.FAILED_GET_TRACK_INFO();
+				err.msg += response.entity;
+				winston.error("getTrackInfo: Failed to get song info: ", err);
+				reject(false, err);
+			});
+		});
+	},
 	/**
 		Add songs to a playlist
 
@@ -218,15 +279,9 @@ module.exports = {
 			tokens:Object - the tokens received during authorization
 					tokens.access_token should be present
 			userId:string - the user id (NOT Spotify URI)
-			playlistId:string - the playlist id to remove the songs from (NOT Spotify URI)
+			playlistId:string - the playlist id to add the songs to (NOT Spotify URI)
 			trackUris:array - an array of objects containing track URIs
-				Format : {
-					'trakcs' : [
-						{'uri' : <spotify track URI>},
-						{'uri' : <spotify track URI>}, ...
-					]
-				}
-
+				Format : [ <spotify track URI>}, <spotify track URI>}, ... ]
 		Returns:
 			A promise that resolves with 2 parameters
 
@@ -253,6 +308,7 @@ module.exports = {
 		return new Promise(function(resolve, reject) {
 			if(trackUris.length <= 0) resolve(true, {code:200, msg: "Success"});
 
+			// Setup REST request options
 			var postFixPath = "users/{user_id}/playlists/{playlist_id}/tracks"
 				.replace("{user_id}", userId)
 				.replace("{playlist_id}", playListId);
@@ -261,7 +317,7 @@ module.exports = {
 			opts.method = 'post';
 			opts.headers["Content-Type"] = "application/json";
 
-			// Slice first 0-99
+			// Take 100 uris off the URI to add
 			var tracksToAdd = track.slice(0,100);
 			opts.entity = { uris : tracksToAdd };
 			winston.debug("_recurseAddSongs: rest options: ", opts);
@@ -576,13 +632,15 @@ module.exports = {
 			Promise resolves 2 paramteres
 			Parameters:
 				status: boolean: set to true
-				data: array: an array of track objects
-					{
+				data: object: an object containing the data
+					code: number - 200
+					'data': array - tracks
+					[{
 						name: string - track title
 						artist: string - artist name
 						album: string - track album name
 						uri: string - spotify uri for the track
-					}
+					}, ... ]
 		On Error:
 			Promise resolve 2 parameters
 			Parameters:
@@ -713,7 +771,7 @@ function extractTracksFromGetPlayListTracks(respData) {
 	var out = [];
 	respData.tracks.items.forEach(function(val) {
 		var track = {
-			name : val.track.name,
+			title : val.track.name,
 			album: val.track.album.name,
 			artist: val.track.artists[0].name,
 			uri: val.track.uri
