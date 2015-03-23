@@ -370,6 +370,9 @@ Session.prototype.addTrack = function(ip, trackUri) {
 				.then(function() {
 					winston.debug("addTrack: track added success: ", trackUri, " by ", ip);
 					this.playList.push(track);
+
+					winston.debug("addTrack: updating view on playlist change");
+					this.socket.emit("updatePlaylist", this.playList);
 				})
 				.catch(function(status, err) {
 					winston.debug("addTrack: track failed to add: ", err);
