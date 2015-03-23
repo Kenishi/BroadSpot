@@ -762,7 +762,7 @@ function checkSid(req, res, next) {
 	var sid;
 	winston.debug("/host: checking sid");
 	try {
-		winston.log("debug", "Cookies: ", req.cookies);
+		winston.deubg("Cookies: ", req.cookies);
 		sid = req.cookies.sid;
 	} catch(e) { sid = undefined; }
 
@@ -851,7 +851,7 @@ function hostAuthResult(req, res, next) {
 
 function hostAuthOk(req, res, next) {
 	var code = req.query.code;
-	winston.log("/host/auth: retrieving tokens");
+	winston.debug("/host/auth: retrieving tokens");
 	spotify.getTokens(code, AUTH_REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, function(success, data) {
 		if(success) {
 			winston.debug("tokens got successfully");
@@ -868,7 +868,7 @@ function hostAuthOk(req, res, next) {
 			res.redirect('/host');
 		}
 		else {
-			winston.log("error", "failed to get tokens reason:", data);
+			winston.error("failed to get tokens reason:", data);
 			req.error = 1; // Error fetching tokens
 			showLogin(req, res, next);
 		}
@@ -928,13 +928,18 @@ app.post('/host/auth', function(req, res) {
 		the SID points too, the connection will abort.
 */
 io.use(function(socket, next) {	
+	winston.info("socketAuth: socket connected: ", socket.request.connection.remoteAddress);
 	var sid = socket.request;
 	
 	var sess = Sessions.findBySid(sid);
 	if(sess) {
 		var ip = socket.request.connection.remoteAddress;
-		if(sess.ip != ip) throw new Error("Session ip and connecting ip do not match");
-		winston.info("Host Authenticated");
+		if(sess.ip != ip) {
+			winston.error("socketAuth: Session ip and connecting ip do not match: ", ip);
+			socket.disconnect();
+			return;
+		}
+		winston.info("socketAuth: host authenticated: ", ip);
 		
 		// Remove any set timers
 		var queueTimer = sess.queueTimer,
@@ -957,7 +962,7 @@ io.use(function(socket, next) {
 				var playlistId = data.id;
 				if(playlistId) {
 					sess.playlistId = playlistId;
-					winston.debug("socket Auth: got playlist id: ", playListId);
+					winston.debug("socketAuth: got playlist id: ", playListId);
 				}
 				else {
 					winston.error("Unexpected return in init playlist. playlistId: ", playlistId);
