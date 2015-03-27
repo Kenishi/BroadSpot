@@ -10,7 +10,6 @@ winston.cli();
 winston.level = 'input';
 
 module.exports = {
-	self : this,
 
 	// function authorizeURL(client_id, redirect_uri, opts)
 	// function getTokens(code, redirect_uri, client_id, client_secret, callback)
@@ -69,8 +68,13 @@ module.exports = {
 			for validation
 		client_id : a string of the apps key id
 		client_secret : the string of the apps secret key
-		callback : a function(success, object|string) that will be called back on completion.
-			On Succes, there will an object
+		
+		Returns:
+			A Promise
+
+		On Succes:
+			code: number = 200,
+			data: object - 
 				{
 					access_token : the access token
 					token_type : how the token can be used, should always be "Bearer"
@@ -78,43 +82,48 @@ module.exports = {
 					expires_at : estimated time when token will expire
 					refresh_token : this token can be used to get new tokens again 
 				}
-			On Error, expect a string with details
+		On Error, expect a string with details
 	*/
-	getTokens: function(code, redirect_uri, client_id, client_secret, callback) {
+	getTokens: function(code, redirect_uri, client_id, client_secret) {
 		if(!code) throw new Error("Authorization code is required in order to get tokens");
 		if(!redirect_uri) throw new Error("Redirect URI is required in order to get tokens");
 		if(!client_id) throw new Error("The app id/key is required in order to get tokens");
 		if(!client_secret) throw new Error("The app secret key is required in order to get tokens");
-		if(!callback || (typeof callback != 'function')) {
-			throw new Error("A callback is required to receive the tokens");
-		}
 
-		var body = {
-			code : code,
-			redirect_uri : redirect_uri,
-			client_id : client_id,
-			client_secret : client_secret,
-			grant_type : "authorization_code"
-		};
+		return new Promise(function(resolve, reject) {
+			var body = {
+				code : code,
+				redirect_uri : redirect_uri,
+				client_id : client_id,
+				client_secret : client_secret,
+				grant_type : "authorization_code"
+			};
 
-		var opts = {
-			path : "https://" + token_url.domain + token_url.path,
-			method : 'post',
-			entity : body,
-			headers : {
-				"Content-Type" : "application/x-www-form-urlencoded",
-				"Accept" : "application/json"
-			}
-		};
+			var opts = {
+				path : "https://" + token_url.domain + token_url.path,
+				method : 'post',
+				entity : body,
+				headers : {
+					"Content-Type" : "application/x-www-form-urlencoded",
+					"Accept" : "application/json"
+				}
+			};
 
-		var client = rest.wrap(mime);
-		client(opts).then(function(response) {
-			var data = response.entity;
-			data.expires_at = new Date(Date.now() + (parseInt(data.expires_in) * 1000 - 5000));
-			callback(true, data);
-		})
-		.catch(function(errorData) {
-			callback(false, errorData);
+			var client = rest.wrap(mime);
+			client(opts).then(function(response) {
+				var data = response.entity;
+				data.expires_at = new Date(Date.now() + (parseInt(data.expires_in) * 1000 - 5000));
+				var out = {
+					code : 200,
+					data : data
+				};
+				resolve(out);
+			})
+			.catch(function(response) {
+				var err = new errors.ERROR_GETTING_TOKENS();
+				err.msg += response.entity;
+				reject(err);
+			});
 		});
 	},
 
@@ -154,10 +163,10 @@ module.exports = {
 			client(opts).then(function(response) {
 				var data = response.entity;
 				data.expires_at = new Date(Date.now() + (parseInt(data.expires_in) * 1000 - 5000));
-				resolve(true, data);
+				resolve(data);
 			})
 			.catch(function(errorData) {
-				reject(false, errorData);
+				reject(errorData);
 			});
 		});
 	},
@@ -169,17 +178,22 @@ module.exports = {
 
 		Expects:
 			token - the token object returned from a getTokens() call
-			callback - the callback to receive the user info in.
-				paramteres:
-					status:boolean - success or fail
-					data:object | string - result data
+		
+		Returns:
+			A promise that resolves
 
 		On Success:
-			Status is set to true and an object with the user info is supplied.
-			See URL for object keys: 
-				https://developer.spotify.com/web-api/get-current-users-profile/
+			result: object - result data
+				code: number = 200
+				data: object - user profile data returned by Spotify (See Spotify Web Api for info)
+					{
+						id: user id,
+						...
+
+					}
+
 		On Error:
-			Status is set to false and an error message is supplied.
+			err: object - error data
 		
 		On Expired Tokens:
 			If the access token has expires, status will be set to false and
@@ -188,31 +202,36 @@ module.exports = {
 			A call to refreshTokens() will need to be done before queryUserInfo
 			can proceed.
 	*/
-	queryUserInfo : function(tokens, callback) {
+	queryUserInfo : function(tokens) {
+		winston.debug("queryUserInfo: tokens:", tokens);
 		if(!tokens) throw new Error("tokens required to get user id");
 		if(!tokens.access_token) throw new Error("access token required to get user id");
-		if(!callback || typeof callback != 'function') throw new Error("callback is required to get user id");
 
-		var valid = (Date.now() - tokens.expires_at) < 0;
-		if(!valid) {
-			callback(false, this.TokenExpiredError);
-		}
-		else {
+		winston.debug("queryUserInfo: begin query user info");
+
+		return new Promise(function(resolve, reject) {
 			var opts = getStubAPIRequest(tokens.access_token, "me");
 			opts.method = "get";
+			opts.headers["Accept"] = 'application/json';
 
 			winston.debug("queryUserInfo: requesting profile, opts: ", opts);
 			var client = rest.wrap(mime);
+			var out = {};
 			client(opts).then(function(response) {
-				var data = response.entity;
-				winston.debug("queryUserInfo: profile received:", data);
-				callback(true, data);
+				out.code = 200;
+				out.data = response.entity;
+
+				winston.debug("queryUserInfo: profile received:", out);
+				resolve(out);
 			})
-			.catch(function(errorData) {
-				winston.debug("queryUserInfo: failed to get profile: ", errorData);
-				callback(false, errorData);
+			.catch(function(response) {
+				var err = new errors.FAILED_QUERYING_PROFILE();
+				err.msg += response;
+
+				winston.debug("queryUserInfo: failed to get profile: ", err);
+				reject(err);
 			});
-		}
+		});
 	},
 	/**
 		Get a track's info by ID or URI
@@ -221,10 +240,9 @@ module.exports = {
 			trackUri: string - a spotify URI or the track ID
 
 		Returns
-			A promise that resolves to 2 parameters
+			A promise that resolves
 
 		On Success:
-			status: boolean - set to true
 			data: object -
 				{
 					code : 200,
@@ -236,7 +254,6 @@ module.exports = {
 					}
 				}
 		On Error:
-			status: boolean - set to false
 			data: object - error data
 	*/
 	getTrackInfo : function(trackUri) {
@@ -266,13 +283,13 @@ module.exports = {
 					}
 				};
 				winston.debug("getTrackInfo: get track info success: ", out.data);
-				resolve(true, out);
+				resolve(out);
 			})
 			.catch(function(response) {
 				var err = new errors.FAILED_GET_TRACK_INFO();
 				err.msg += response.entity;
 				winston.error("getTrackInfo: Failed to get song info: ", err);
-				reject(false, err);
+				reject(err);
 			});
 		});
 	},
@@ -287,30 +304,38 @@ module.exports = {
 			trackUris:array - an array of objects containing track URIs
 				Format : [ <spotify track URI>}, <spotify track URI>}, ... ]
 		Returns:
-			A promise that resolves with 2 parameters
+			A promise that resolves
 
 		On Succes:
-			status: boolean - set to true
 			data: object : { code: 200, msg: "Success"}
 
 		Ob Error:
-			status: boolean - set to false
 			data: object - an object containing data on the error
 	*/
 	addSongs : function(tokens, userId, playListId, trackUris) {
 		if(!tokens) throw new Error("Tokens required to remove songs");
 		if(!tokens.access_token) throw new Error("Access token required to remove songs");
 		if(!userId) throw new Error("User ID is required to remove songs");
-		if(!playlistId) throw new Error("Playlist ID required to remove songs");
+		if(!playListId) throw new Error("Playlist ID required to remove songs");
 		if(!trackUris) throw new Error("Track URIs are required to remove songs");
 
+		var self = this;
+
 		return new Promise(function(resolve, reject) {
-			resolve(_recurseAddSongs(tokens, userId, playListId, trackUris));
+			if(trackUris <= 0) resolve({code:200, msg: "Success"});
+			else resolve(self._recurseAddSongs(tokens, userId, playListId, trackUris));
 		});
 	},
 	_recurseAddSongs : function(tokens, userId, playListId, trackUris) {
+		var self = this;
+
 		return new Promise(function(resolve, reject) {
-			if(trackUris.length <= 0) resolve(true, {code:200, msg: "Success"});
+			if(trackUris.length <= 0) {
+				resolve({code:200, msg: "Success"});
+				return;
+			}
+			winston.debug("_recurseAddSongs: enter: ", trackUris);
+			winston.debug("_recurseAddSongs: length: ", trackUris.length);
 
 			// Setup REST request options
 			var postFixPath = "users/{user_id}/playlists/{playlist_id}/tracks"
@@ -322,14 +347,15 @@ module.exports = {
 			opts.headers["Content-Type"] = "application/json";
 
 			// Take 100 uris off the URI to add
-			var tracksToAdd = track.slice(0,100);
+			var tracksToAdd = trackUris.slice(0,100);
 			opts.entity = { uris : tracksToAdd };
 			winston.debug("_recurseAddSongs: rest options: ", opts);
 
 			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
 				// Feed 100-end on to next
-				resolve(_recurseAddSongs(tokens, userId, playListId, trackUris.slice(100)));
+				winston.debug("_recurseAddSongs: after cut:", trackUris.slice(100));
+				resolve(self._recurseAddSongs(tokens, userId, playListId, trackUris.slice(100)));
 			})
 			.catch(function(response) {
 				// TODO: May return the remaining songs not added?
@@ -337,7 +363,7 @@ module.exports = {
 				var err = new errors.ERROR_ADDING_TRACKS();
 				err.msg += response.entity;
 				winston.error("_recurseAddSongs: error adding: ", response.entity);
-				reject(false, err);
+				reject(err);
 			});
 		});
 	},
@@ -356,11 +382,14 @@ module.exports = {
 						{'uri' : <spotify track URI>},
 						{'uri' : <spotify track URI>}, ...
 					]
+			positions:array - (optional) an array of numbers indicating the position of each track
+				This array must be the same size as trackUris.
+				If no 'positions' is specified, then all occurances of trackUris are deleted
+				from the playlist
 		Returns:
-			A Promise that resolves to 2 parameters
+			A Promise that resolves
 
 			On Success:
-				status: boolean - set to true
 				data: object: 
 					{
 						code: number - 200
@@ -368,22 +397,23 @@ module.exports = {
 					}
 
 			On Error:
-				status: boolean - set to false
 				data: object: - will contain the error data
 
 	**/
-	removeSongs : function(tokens, userId, playlistId, trackUris) {
+	removeSongs : function(tokens, userId, playlistId, trackUris, positions) {
 		if(!tokens) throw new Error("Tokens required to remove songs");
 		if(!tokens.access_token) throw new Error("Access token required to remove songs");
 		if(!userId) throw new Error("User ID is required to remove songs");
 		if(!playlistId) throw new Error("Playlist ID required to remove songs");
 		if(!trackUris) throw new Error("Track URIs are required to remove songs");
+		if(positions && positions.length != trackUris.length) 
+			throw new Error("Position length must match trackUri length");
 
 		return new Promise(function(resolve) {
-			resolve(self._recurseRemoveSongs(tokens, userId, playListId, tracksUris));
+			resolve(self._recurseRemoveSongs(tokens, userId, playlistId, trackUris, positions));
 		});
 	},
-	_recurseRemoveSongs : function(tokens, userId, playListId, trackUris) {
+	_recurseRemoveSongs : function(tokens, userId, playlistId, trackUris, positions) {
 		return new Promise(function(resolve, reject) {
 			if(trackUris.length <= 0) resolve(true, {code:200, msg: "success"});
 
@@ -395,32 +425,20 @@ module.exports = {
 			opts.method = "delete";
 			opts.headers["Content-Type"] = 'application/json';
 			
-			/*
-				Note: Spotify expects the body to be a JSON in a format
-				different then how the track uris are passed into the 
-				functions. Spotify expects: 
-					{
-						'tracks' : [
-							{ 'uri' : <spotify track uri> },
-							...
-						]
-					}
-			*/
-			var removeArray = {};
-			removeArray.tracks = trackUris.slice(0,100);
+			params = getRemoveArray(trackUris, positions);
 
-			opts.entity = removeArray;
+			opts.entity = params.removeArray;
 
 			var client = rest.wrap(mime);
 			client(opts).then(function(response) {
 				if(response.status.code==200) {
-					resolve(self._recurseRemoveSongs(tokens, userId, playListId, trackUris.slice(100)));
+					resolve(self._recurseRemoveSongs(tokens, userId, playlistId, params.next.trackUris, params.next.positions));
 				}
 			})
 			.catch(function(response) {
 				var err = new errors.ERROR_REMOVING_TRACKS();
 				err.msg += response.entity;
-				reject(false, err);
+				reject(err);
 			});
 		});
 	},
@@ -434,10 +452,9 @@ module.exports = {
 			playlistName: string - the name of the playlist 
 
 		Returns:
-			A promise that resolves to 2 parameters
+			A promise that resolves
 
 		On Success:
-			status: boolean - set to true, EVEN IF PLAYLIST IS NOT FOUND
 			data: object - object contains the result
 				{
 					code : number: 200
@@ -445,14 +462,14 @@ module.exports = {
 					id: string - the playlist's id
 				}
 		On Error:
-			status: boolean - set to false
 			data: object - contains the details on the error
 	*/
 
 	lookupPlaylistId : function(tokens, userId, playlistName) {
+		self = this;
 		return new Promise(function(resolve, reject) {
 			winston.debug("lookupPlaylistId: looking for: ", playlistName);
-			self.getHostsPlaylists(tokens, userId).then(function(status, data) {
+			self.getHostsPlaylists(tokens, userId).then(function(data) {
 				var playLists = data.playLists;
 				// See if every playlist doesn't equal the name, resolve the one that does & abort
 				var notFound = playLists.every(function(val) {
@@ -466,7 +483,7 @@ module.exports = {
 							id : val.id
 						};
 						winston.debug("lookupPlaylistId: found playlist, id:", out.id);
-						resolve(true, out);
+						resolve(out);
 						return false;
 					}
 				});
@@ -477,11 +494,11 @@ module.exports = {
 						id : null
 					};
 					winston.debug("lookupPlaylistId: playlist not found");
-					resolve(true, out);
+					resolve(out);
 				}
 			})
-			.catch(function(status, data) { 
-				reject(status, data); 
+			.catch(function(data) { 
+				reject(data); 
 			});
 		});
 	},
@@ -494,10 +511,9 @@ module.exports = {
 			playlistNmae: string - the playlst name
 
 		Returns:
-			A Promise that resolves to 2 paramters
+			A Promise that resolves
 
 		On Success:
-			status: boolean - set to true
 			data: object - object that will contain the playlist id
 				{
 					code: number - 200,
@@ -505,7 +521,6 @@ module.exports = {
 				}
 
 		On Error:
-			status: boolean - set to false
 			data: object - an object containing error data
 	*/
 	createPlaylist : function(tokens, userId, playlistName) {
@@ -533,13 +548,13 @@ module.exports = {
 					id: id
 				};
 				winston.debug("createPlaylist: create success, id: ", id);
-				resolve(true, out);
+				resolve(out);
 			})
 			.catch(function(response) {
 				winston.error("createPlaylist: failed to create playlist: ", response.entity);
 				var err = errors.FAILED_CREATE_PLAYLIST();
 				err.msg += response.entity;
-				reject(false, err);
+				reject(err);
 			});
 		});
 	},
@@ -550,8 +565,6 @@ module.exports = {
 			A promise
 
 		On Success:
-			Resolves to 2 parameters.
-				status: boolean - set to true to signify success
 				data: object - Holding the information
 					{
 						code: int - should be set to 200
@@ -576,7 +589,7 @@ module.exports = {
 			var postFixPath = "users/{1}/playlists".replace("{1}", userId);
 			var opts = getStubAPIRequest(tokens.access_token, postFixPath);
 			
-			winston.debug("getHostsPlaylists: entering recursive call")
+			winston.debug("getHostsPlaylists: entering recursive call");
 			resolve(self._recurseGetPlaylists(tokens, userId, opts.path));
 		});
 	},
@@ -595,6 +608,7 @@ module.exports = {
 			client(opts).then(function(response) {
 				// Grab all the names and IDs on this page
 				var data = response.entity;
+				winston.debug("spotify: get playlists: ", data);
 				if(data.items.length > 0) {
 					data.items.forEach(function(playlist) {
 						var pl = {
@@ -612,14 +626,14 @@ module.exports = {
 				}
 				else {
 					winston.debug("spotify: get playlists: finish");
-					resolve(true, {code : 200, playLists : curPlaylists});
+					resolve({code : 200, playLists : curPlaylists});
 				}
 			})
 			.catch(function(response) {
 				winston.error("spotify: get playlists: error(", response.status.code, "): ",response.entity);
 				var err = new errors.FETCH_PLAYLISTS_FAILED();
 				err.msg += response.entity;
-				reject(false, err);
+				reject(err);
 			});
 		});
 	},
@@ -636,9 +650,7 @@ module.exports = {
 			A promise
 
 		On Success:
-			Promise resolves 2 paramteres
 			Parameters:
-				status: boolean: set to true
 				data: object: an object containing the data
 					code: number - 200
 					'data': array - tracks
@@ -649,9 +661,7 @@ module.exports = {
 						uri: string - spotify uri for the track
 					}, ... ]
 		On Error:
-			Promise resolve 2 parameters
 			Parameters:
-				status: boolean: set to false
 				data: an object of the error data
 	*/
 	getPlaylistTracks : function(tokens, userId, playListId) {
@@ -668,12 +678,14 @@ module.exports = {
 		var stub = getStubAPIRequest(tokens.access_token, postFixPath);
 		var url = stub.path;
 		return new Promise(function(resolve, reject) {
+			winston.debug("getPlaylistTracks: recursing for tracks");
 			resolve(self._recurseGetPlaylistTracks(tokens, userId, playListId, url));
 		});
 	},
 	_recurseGetPlaylistTracks : function(tokens, userId, playListId, url, tracksList) {
+		winston.debug("_recurseGetPlaylistTracks: enter");
 		if(!tracksList) tracksList = [];
-
+		winston.debug("_recurseGetPlaylistTracks: entering promise");
 		return new Promise(function(resolve, reject) {
 			// Setup REST request options
 			var opts = getStubAPIRequest(tokens.access_token, "");
@@ -706,32 +718,34 @@ module.exports = {
 						data : tracksList
 					};
 					winston.debug("_recurseGetPlaylistTracks: finished, resolving: ", out);
-					resolve(true, out);
+					resolve(out);
 				}
 
 			})
 			.catch(function(response) {
 				winston.error("_recurseGetPlaylistTracks: error getting playlist tracks: ", response.entity);
-				resolve(false, response.entity);
+				resolve(response.entity);
 			});
 		});
 
 	},
 	copyOverPlaylist : function(tokens, userId, targetListId, playlistId) {
+		var self = this;
 		return new Promise(function(resolve, reject) {
 			// Get Playlist Tracks
 			winston.debug("copyOverPlaylist: getting target playlist tracks, id:", targetListId);
 			self.getPlaylistTracks(tokens, userId, targetListId)
-				.then(function(status, data) {
-					var tracks = data;
+				.then(function(results) {
+					var tracks = results.data;
 					var addArray = tracks.map(function(val) {
 						return val.uri;
 					});
-					resolve(self.addSongs(tokens, userId, playListId, addArray));
+					winston.debug("copyOverPlaylist: adding songs: ", addArray);
+					resolve(self.addSongs(tokens, userId, playlistId, addArray));
 				})
-				.catch(function(status, err) {
+				.catch(function(err) {
 					winston.error("copyOverPlaylist: error getting target playlist: ", err);
-					reject(false, err);
+					reject(err);
 				});
 		});
 	},
@@ -786,6 +800,54 @@ function extractTracksFromGetPlayListTracks(respData) {
 		out.push(track);
 	});
 	return out;
+}
+
+/*
+	Get the remove array for removeSongs
+
+	Returns an object.
+		{
+			removeArray: object for request entity body
+				{
+					'tracks' : [ {uri : <track uri>, position: [#]}, ...]
+				}
+			next: object - the next parameteres to feed into recurse
+				{
+					trackUris: array of track uris. ex: [uri, uri, uri]
+					positions: array of numbers. ex: [3, 4, 8, 9]
+				}
+		}
+*/
+function getRemoveArray(trackUris, positions) {
+	var objOut = {};
+	objOut.removeArray = {};
+	objOut.removeArray.tracks = [];
+	
+	objOut.next = {};
+
+	var tracks = trackUris.slice(0, 100);
+	if(positions) {
+		var posArray = positions.slice(0, 100);
+		var entity = {};
+
+		tracks.forEach(function(val, index) {
+			var entry = { uri: val, positions: [posArray[index]]};
+			objOut.removeArray.tracks.push(entry);
+		});
+
+		objOut.next.positions = positions.slice(100);
+	}
+	else {
+		objOut.tracks = [];
+		tracks.forEach(function(val) {
+			var entry = { uri : val };
+			objOut.removeArray.tracks.push(entry);
+		});
+	}
+
+	objOut.next.trackUris = trackUris.slice(100);
+
+	return objOut;
 }
 
 function buildShowDlgParam(doShow) {

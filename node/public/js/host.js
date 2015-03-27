@@ -1,22 +1,14 @@
 var app = angular.module('hostControlApp', []);
 
 app.controller('hostCtrl', function($scope) {
-	$scope.playlistName = "defaultPlaylistName";
+	$scope.playlistName = "My BroadSpot Playlist";
 
 	$scope.playlist = [];
 	$scope.hostPlaylists = [];
 	$scope.banned = [];
 	$scope.banModalData = {};
-	$scope.partyCode = "12345";
-	$scope.powered = true;
-
-	$scope.testLoadPlaylist = function() {
-			$scope.playlist = [ 
-			{ipaddr: "localhost", artist: "Joey", title : "Play that funky music", album:"Nomans Land", id: "songid1"},
-			{ipaddr: "64.29.124.255", artist : "Bobby Joe", title: "Fire fire fire", album: "Steal this", id: "songig2"}
-			];
-			console.log($scope.playlist.length);
-	};
+	$scope.partyCode = "******";
+	$scope.powered = false;
 
 	$scope.connect = function() {
 		window.socket = io('//');
@@ -47,36 +39,15 @@ app.controller('hostCtrl', function($scope) {
 
 	$scope.showBanList = function() {
 		$("#banLoading").toggleClass("hidden", false);
+		console.log("ban len: " + $scope.banned.length);
+		window.socket.emit('getBanList');
 		$("#banListModal").modal();
-		var data = [{
-			ipaddr : "244.12.324.12"
-		},
-		{
-			ipaddr : "85.241.23.0"
-		},
-		{
-			ipaddr : "128.0.0.1"
-		}];
-		//window.socket.emit('getBanList');
-		setTimeout(function() { $scope.updateBanList(data); }, 2000);
 	};
 
 	$scope.showCopyList = function() {
 		$("#listLoading").toggleClass("hidden", false);
-		//window.socket.emit('getPlaylists');
-		var data = [{
-			name : "Kickass Playlist 1",
-			id : "kickasspl1-1"
-		},
-		{
-			name : "Lameass Playlist 2",
-			id : "lameaasspl1-1"
-		},
-		{
-			name : "Playlist 2",
-			id : "playyylist1"
-		}];
-		setTimeout(function() { $scope.updateLists(data); }, 2000);
+		window.socket.emit('getPlaylists');
+		
 		$("#copyListModal").modal();
 	};
 
@@ -92,42 +63,33 @@ app.controller('hostCtrl', function($scope) {
 
 	$scope.copyInPlaylist = function(id, event) {
 		console.log("Copying: " + id);
-		// Toggle button to green and siabled
+		// Toggle button to green and disabled
 		$(event.target).toggleClass("btn-default", false).toggleClass("btn-success");
 		$(event.target).toggleClass("disabled", true);
 		// Change text
 		$(event.target).text("Adding...");
-		//window.socket.emit("addPlaylist", {playListId : id});
+		window.socket.emit("addPlaylist", {playListId : id});
 	};
 
 	$scope.unBanUser = function(ip) {
 		var data = { ip: ip };
-		//window.socket.emit('unban', { ip : ip })
-		console.log("Unban: " + data.ip);
+		window.socket.emit('unban', { ip : ip })
 	};
 
 	$scope.clearPlaylist = function() {
-		//window.socket.emit('clearPlayList');
+		window.socket.emit('clearPlayList');
 		console.log("Playlist cleared");
 		$("#clearListModal").modal('hide');
 	};
 
 	$scope.togglePower = function() {
 		$scope.powered = !$scope.powered;
-		var data = {
-			 powered : $scope.powered
-		};
-		console.log("Powered State Change: " + data.powered);
-		//window.socket.emit('updatePowerState', data);
+		window.socket.emit('updatePowerState', data);
 	};
 
 	$scope.genNewCode = function() {
 		$("#genCodeBtn").toggleClass("disabled", true);
-		//window.socket.emit('changeCode');
-		var data = {
-			partyCode : Math.floor(1+Math.random()*1000000).toString()
-		};
-		setTimeout(function() { $scope.updateCode(data); }, 2000);
+		window.socket.emit('changeCode');
 	};
 
 	/*****************************
@@ -143,12 +105,20 @@ app.controller('hostCtrl', function($scope) {
 	// Ban the user. Called when the user clicks "Yes" in modal
 	$scope.doBan = function(ipaddr) {
 		console.log("Banned: " + ipaddr);
-		//window.socket.emit('ban', {ipaddr : ipaddr});
+		window.socket.emit('ban', {ipaddr : ipaddr});
 		$("#banUserModal").modal('hide');
 	};
 
-	$scope.removeSong = function(track) {
-		//window.socket.emite('removeSong', track);
+	$scope.removeSong = function(track, pos) {
+		console.log("Pos: " + pos);
+
+		var data = {
+			uri : track.uri,
+			pos : pos
+		};
+		console.log("removeSong: ");
+		console.log(data);
+		window.socket.emit('removeSong', data);
 		console.log("Removing Song:");
 		console.log(track);		
 	};
@@ -168,6 +138,7 @@ app.controller('hostCtrl', function($scope) {
 		$("#genCodeBtn").toggleClass("disabled", false);
 		$scope.$apply(function() {
 			$scope.partyCode = data.partyCode;
+			console.log("socket:updateCode: " + data.partyCode);
 		});
 	};
 
@@ -175,15 +146,26 @@ app.controller('hostCtrl', function($scope) {
 		$("#listLoading").toggleClass("hidden", true);
 		$scope.$apply(function() {
 			$scope.hostPlaylists = data.playlists;
+			console.log("socket:updateLists: " + data.playlists);
 		});
 	};
 	$scope.updatePlaylist = function(data) {
 		$scope.$apply(function() {
-			$scope.playlist = data.playlist;
+			console.log("socket:updatePlaylist: data: ");
+			console.log(data);
+			if(data.playlist) {
+				console.log("socket:updatePlaylist: ");
+				console.log(data);
+				$scope.playlist = data.playlist;
+			}
+			else {
+				console.log("socket:updatePlaylist: no playlist");
+			}
 		});
 	};
 	$scope.updatePowerState = function(data) {
 		$scope.$apply(function() {
+			console.log("powered: " + $scope.powered + " => " + data.powered);
 			$scope.powered = data.powered;
 		});
 	};

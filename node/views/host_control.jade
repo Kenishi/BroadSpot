@@ -25,8 +25,6 @@ html(ng-app="hostControlApp")
 					ul(class="nav navbar-nav")
 						li
 							a(href="#" class="navbar-btn" title="Generate new party code" id="partycode" ng-click="showChangeCode()" ng-bind="partyCode")
-						li
-							a(href="#" class="navbar-btn" title="Test adding to playlist" ng-click="testLoadPlaylist()") Test Playlist Load
 					ul(class="nav navbar-nav navbar-right")
 						li(class="dropdown")
 							a(href="#" class="navbar-btn dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false") Admin
@@ -75,7 +73,7 @@ html(ng-app="hostControlApp")
 							div(class="trackTitle col-md-3") {{track.title}}
 							div(class="album col-md-3") {{track.album}}
 							div(class="col-md-1")
-								button(class="removeBtn btn btn-default" title="Remove track from playlist" ng-click="removeSong(track)")
+								button(class="removeBtn btn btn-default" title="Remove track from playlist" ng-click="removeSong(track, $index)")
 									span(class="glyphicon glyphicon-remove")
 
 		// Ban selected user modal
@@ -115,10 +113,12 @@ html(ng-app="hostControlApp")
 						button(type="btn btn-default" class="close" data-dismiss="modal")
 							span(aria-hidde="true" class="modalCloseBtn") &times;
 						h4(class="modal-title") Copy in Playlist
-							span(id="listLoading" class="show")
+							span(id="listLoading" class="")
 								small Loading...
 					div(class="modal-body")
-						ul(class="list-group")
+						div(class="text-center" ng-show="hostPlaylists.length <= 0")
+							h4 You have no playlists on your Spotify
+						ul(class="list-group" ng-show="hostPlaylists.length > 0")
 							li(ng-repeat="plItem in hostPlaylists" class="list-group-item")
 								div(class="row")
 									div(class="col-xs-5") {{plItem.name}}
@@ -132,10 +132,12 @@ html(ng-app="hostControlApp")
 						button(type="btn btn-default" class="close" data-dismiss="modal")
 							span(aria-hidde="true" class="modalCloseBtn") &times;
 						h4(class="modal-title") Remove a ban
-							span(id="banLoading" class="show")
+							span(id="banLoading" class="")
 								small Loading...
 					div(class="modal-body")
-						ul(class="list-group")
+						div(class="text-center" ng-show="banned.length <= 0")
+							h4 Your ban list is empty
+						ul(class="list-group" ng-show="banned.length > 0")
 							li(ng-repeat="ban in banned" class="list-group-item")
 								div(class="row")
 									div(class="col-xs-5") {{ban.ipaddr}}
@@ -153,7 +155,7 @@ html(ng-app="hostControlApp")
 					div(class="modal-body text-center")
 						h3(id="changeCodeModalTxt")
 							kbd
-								a(ng-href="/party/{{partyCode}}" ng-bind="partyCode")
+								a(ng-href="/party/{{partyCode}}" ng-bind="partyCode" target="_blank")
 						p
 							button(ng-click="genNewCode()" class="btn btn-success" id="genCodeBtn") Get a New Code
 						small Note: The old code will stop working
@@ -164,6 +166,7 @@ html(ng-app="hostControlApp")
 					div(class="modal-header")
 						h4(class="modal-title") Oops!
 					div(class="modal-body text-center")
-						| You got disconnected from the server.
-						br
-						| Attempting to reconnect...
+						h5
+							| You got disconnected from the server.
+							br
+							| Attempting to reconnect...

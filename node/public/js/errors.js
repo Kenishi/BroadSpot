@@ -38,6 +38,14 @@ var errors = {
 	SOCKET_NOT_CONNECTED : function() {
 		this.code = 10;
 		this.msg="Action could not be completed, session socket not connected.";
+	},
+	FAILED_QUERYING_PROFILE : function() {
+		this.code = 11;
+		this.msg="Querying user profile failed. Response data: ";
+	},
+	ERROR_GETTING_TOKENS : function() {
+		this.code = 12;
+		this.msg="Failed to get tokens from Spotify. Response data: ";
 	}
 };
 

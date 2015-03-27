@@ -1,1 +1,1097 @@
-{}
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"play",
+				"playListActivity"
+			],
+			[
+				"remove",
+				"removeSong"
+			],
+			[
+				"track",
+				"trackPos"
+			],
+			[
+				"get",
+				"getTrackPos"
+			],
+			[
+				"pl",
+				"playlist"
+			],
+			[
+				"reomv",
+				"removeSongs"
+			],
+			[
+				"pos",
+				"positions"
+			],
+			[
+				"trackUri",
+				"trackUris"
+			],
+			[
+				"obj",
+				"objOut"
+			],
+			[
+				"getPl",
+				"getPlaylist"
+			],
+			[
+				"getPlay",
+				"getPlaylist"
+			],
+			[
+				"getPLay",
+				"getPlaylist"
+			],
+			[
+				"getPL",
+				"getPlaylistId"
+			],
+			[
+				"ac",
+				"activity"
+			],
+			[
+				"image",
+				"imageUri"
+			],
+			[
+				"_re",
+				"_recurseAddSongs"
+			],
+			[
+				"_rec",
+				"_recurseAddSongs"
+			],
+			[
+				"ban",
+				"banModal"
+			],
+			[
+				"verify",
+				"verifyFreshTokens"
+			],
+			[
+				"init",
+				"initSessionPl"
+			],
+			[
+				"socket",
+				"socketCookieParser"
+			],
+			[
+				"query",
+				"queryUserInfo"
+			],
+			[
+				"queue",
+				"queueTime"
+			],
+			[
+				"trackUR",
+				"trackUri"
+			],
+			[
+				"update",
+				"updateQueueTime"
+			],
+			[
+				"clear",
+				"clearTimers"
+			],
+			[
+				"conta",
+				"playlistContains"
+			],
+			[
+				"lastQueu",
+				"lastQueueTime"
+			],
+			[
+				"refres",
+				"refreshPlaylist"
+			],
+			[
+				"refresh",
+				"refreshPlaylist"
+			],
+			[
+				"ref",
+				"refreshPlaylist"
+			],
+			[
+				"refre",
+				"refreshPlaylist"
+			],
+			[
+				"getPla",
+				"getPlaylistTracks"
+			],
+			[
+				"create",
+				"createPlaylist"
+			],
+			[
+				"playli",
+				"playlistName"
+			],
+			[
+				"playList",
+				"playlistName"
+			],
+			[
+				"look",
+				"lookupPlaylistId"
+			],
+			[
+				"playl",
+				"playlistName"
+			],
+			[
+				"_res",
+				"_recurseRemoveSongs"
+			],
+			[
+				"_",
+				"_recurseAddSongs"
+			],
+			[
+				"recurse",
+				"_recurseAddSongs"
+			],
+			[
+				"recur",
+				"_recurseAddSongs"
+			],
+			[
+				"tracks",
+				"tracksToAdd"
+			],
+			[
+				"targ",
+				"targetListId"
+			],
+			[
+				"trac",
+				"tracksList"
+			],
+			[
+				"recei",
+				"receivedTracks"
+			],
+			[
+				"pla",
+				"playListId"
+			],
+			[
+				"queueE",
+				"queueEnabled"
+			],
+			[
+				"playL",
+				"playList"
+			],
+			[
+				"tar",
+				"targetListId"
+			],
+			[
+				"post",
+				"postFixPath"
+			],
+			[
+				"CLIE",
+				"CLIENT_ID"
+			],
+			[
+				"updateP",
+				"updatePlaylist"
+			],
+			[
+				"Broa",
+				"BROADSPOT_PLAYLIST_NAME"
+			],
+			[
+				"playLi",
+				"playlistId"
+			],
+			[
+				"lookup",
+				"lookupPlaylist"
+			],
+			[
+				"veri",
+				"verifyFreshTokens"
+			],
+			[
+				"CLI",
+				"CLIENT_ID"
+			],
+			[
+				"expire",
+				"expires_at"
+			],
+			[
+				"CLIEN",
+				"CLIENT_SECRET"
+			],
+			[
+				"last",
+				"lastQueueTime"
+			],
+			[
+				"remo",
+				"removeList"
+			],
+			[
+				"user",
+				"userId"
+			],
+			[
+				"path",
+				"path_postfix"
+			],
+			[
+				"error",
+				"errorData"
+			],
+			[
+				"body",
+				"body_length"
+			],
+			[
+				"res",
+				"responseData"
+			],
+			[
+				"Conte",
+				"Content-Length"
+			],
+			[
+				"Content",
+				"Content-Type"
+			],
+			[
+				"token",
+				"token_url"
+			],
+			[
+				"dele",
+				"deleteTimer"
+			],
+			[
+				"que",
+				"queueTimer"
+			],
+			[
+				"fin",
+				"findBySid"
+			],
+			[
+				"SESS",
+				"SESSION_DELETE_TIMEOUT"
+			],
+			[
+				"Q",
+				"SESSION_QUEUING_TIMEOUT"
+			],
+			[
+				"disalb",
+				"disableQueueing"
+			],
+			[
+				"dis",
+				"disableQueueTimer"
+			],
+			[
+				"find",
+				"findBySocket"
+			],
+			[
+				"debug",
+				"debugPrintSessions"
+			],
+			[
+				"session",
+				"sessionIP"
+			],
+			[
+				"recon",
+				"reconnectModal"
+			],
+			[
+				"margin",
+				"margin-top"
+			],
+			[
+				"party",
+				"partyCode"
+			],
+			[
+				"background",
+				"background-color"
+			],
+			[
+				"gl",
+				"glyphicon-th-list"
+			],
+			[
+				"findBy",
+				"findBySocket"
+			],
+			[
+				"findB",
+				"findBySocket"
+			],
+			[
+				"listg",
+				"list-group-item"
+			],
+			[
+				"host",
+				"hostPlaylists"
+			],
+			[
+				"ip",
+				"ipaddr"
+			],
+			[
+				"text",
+				"text-align"
+			],
+			[
+				"check",
+				"checkBan"
+			],
+			[
+				"paddin",
+				"padding-right"
+			],
+			[
+				"padd",
+				"padding-left"
+			],
+			[
+				"hostAuth",
+				"hostAuthOk"
+			],
+			[
+				"spo",
+				"spotify_keys"
+			],
+			[
+				"CL",
+				"CLIENT_SECRET"
+			],
+			[
+				"api",
+				"api_url"
+			],
+			[
+				"access",
+				"access_token"
+			],
+			[
+				"hostAut",
+				"hostAuthResult"
+			],
+			[
+				"hostAu",
+				"hostAuthOk"
+			],
+			[
+				"new",
+				"newUser"
+			],
+			[
+				"lastQu",
+				"lastQueueTime"
+			],
+			[
+				"sess",
+				"sessions"
+			],
+			[
+				"dest",
+				"destroySession"
+			],
+			[
+				"part",
+				"partyCode"
+			],
+			[
+				"proto",
+				"prototype"
+			],
+			[
+				"Pop",
+				"populating"
+			],
+			[
+				"status",
+				"statusCode2Text"
+			],
+			[
+				"job",
+				"jobqApp"
+			],
+			[
+				"cur",
+				"curPopulatingDatabases"
+			],
+			[
+				"populate",
+				"populateTableData"
+			],
+			[
+				"popul",
+				"populateTableData"
+			],
+			[
+				"rece",
+				"receiver"
+			],
+			[
+				"receive",
+				"receiveAction"
+			],
+			[
+				"pyq",
+				"pyqtSlot"
+			],
+			[
+				"clas",
+				"classmethod"
+			],
+			[
+				"dice",
+				"dice_id"
+			],
+			[
+				"decla",
+				"declarative_base"
+			],
+			[
+				"base",
+				"BaseJob"
+			],
+			[
+				"pol",
+				"polymorphic_identity"
+			],
+			[
+				"desc",
+				"description"
+			],
+			[
+				"Li",
+				"LINK_PAGE_SCRIPT"
+			],
+			[
+				"Re",
+				"RequestHandler"
+			],
+			[
+				"gen",
+				"genXMLEntry"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "node/main.js",
+			"settings":
+			{
+				"buffer_size": 35971,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "node/public/js/app.js",
+			"settings":
+			{
+				"buffer_size": 1042,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "node/views/host_control.jade",
+			"settings":
+			{
+				"buffer_size": 7750,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "node/spotify.js",
+			"settings":
+			{
+				"buffer_size": 26540,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "node/public/js/host.js",
+			"settings":
+			{
+				"buffer_size": 5025,
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 392.0,
+		"last_filter": "lint",
+		"selected_items":
+		[
+			[
+				"lint",
+				"SublimeLinter: Enable Linting"
+			],
+			[
+				"dsiab",
+				"SublimeLinter: Disable Linting"
+			],
+			[
+				"html",
+				"Set Syntax: HTML"
+			],
+			[
+				"ena",
+				"SublimeLinter: Enable Linting"
+			],
+			[
+				"disab",
+				"SublimeLinter: Disable Linting"
+			],
+			[
+				"enable",
+				"SublimeLinter: Enable Linting"
+			],
+			[
+				"disable",
+				"SublimeLinter: Disable Linting"
+			],
+			[
+				"package",
+				"Package Control: Remove Package"
+			],
+			[
+				"li",
+				"SublimeLinter: Disable Linting"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			],
+			[
+				"packages",
+				"Package Control: List Packages"
+			],
+			[
+				"Install",
+				"Package Control: Install Package"
+			],
+			[
+				"css",
+				"Set Syntax: CSS"
+			],
+			[
+				"unfold",
+				"Code Folding: Unfold All"
+			],
+			[
+				"tag",
+				"Code Folding: Fold Tag Attributes"
+			],
+			[
+				"javasc",
+				"Set Syntax: JavaScript"
+			],
+			[
+				"python",
+				"Set Syntax: Python"
+			],
+			[
+				"yaml",
+				"Set Syntax: YAML"
+			],
+			[
+				"java",
+				"Set Syntax: JavaScript"
+			]
+		],
+		"width": 467.0
+	},
+	"console":
+	{
+		"height": 139.0,
+		"history":
+		[
+			"import urllib.request,os,hashlib; h = 'eb2297e1a458f27d836c04bb0cbaf282' + 'd0e7a3098092775ccb37ca9d6b2e4b7d'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/Users/Kei/git/Broadspot",
+		"/Users/Kei/git/Broadspot/node",
+		"/Users/Kei/git/Broadspot/node/public",
+		"/Users/Kei/git/Broadspot/node/public/css",
+		"/Users/Kei/git/Broadspot/node/public/js",
+		"/Users/Kei/git/Broadspot/node/views"
+	],
+	"file_history":
+	[
+		"/Users/Kei/git/Broadspot/node/views/party.jade",
+		"/Users/Kei/git/Broadspot/node/public/js/cookie.js",
+		"/Users/Kei/git/Broadspot/node/public/js/errors.js",
+		"/Users/Kei/git/Broadspot/node/spotify.js",
+		"/Users/Kei/git/Broadspot/node/main.js",
+		"/Users/Kei/git/Broadspot/node/test.js",
+		"/Users/Kei/git/Broadspot/node/views/host_control.jade",
+		"/Users/Kei/git/Broadspot/node/public/js/host.js",
+		"/Users/Kei/Documents/test.htm",
+		"/Users/Kei/git/Broadspot/node/views/host_login.jade",
+		"/Users/Kei/git/Broadspot/node/views/index.jade",
+		"/Users/Kei/git/Broadspot/node/public/css/host.css",
+		"/Users/Kei/Library/Application Support/Sublime Text 3/Packages/User/JavaScript.sublime-settings",
+		"/Users/Kei/git/Broadspot/node/client_test.js",
+		"/Users/Kei/git/Broadspot/node/public/css/host_control.css",
+		"/Users/Kei/git/Broadspot/node/public/Layer 1.svg",
+		"/Users/Kei/git/Broadspot/.gitignore",
+		"/Users/Kei/git/Broadspot/node/public/js/host_login.js",
+		"/Users/Kei/git/Broadspot/node/spotify_keys.js",
+		"/Users/Kei/git/JobQ/res/css/internal.css",
+		"/Users/Kei/git/JobQ/test_dice.py",
+		"/Users/Kei/git/JobQ/tables.py",
+		"/Users/Kei/git/JobQ/tests/dice_test.py",
+		"/Users/Kei/git/JobQ/jobq.sublime-project",
+		"/Users/Kei/git/Aberdynic/pages/index.htm",
+		"/Users/Kei/git/Aberdynic/static/site.css",
+		"/Users/Kei/git/Aberdynic/static/skills.htm",
+		"/Users/Kei/git/Aberdynic/pages/skills.htm",
+		"/Users/Kei/git/Aberdynic/pages/site.css",
+		"/Users/Kei/git/GalleryHangout/app.yaml",
+		"/Users/Kei/git/iamacrss/rss.app.py",
+		"/Users/Kei/Library/Application Support/Sublime Text 3/Packages/User/HTML.sublime-settings"
+	],
+	"find":
+	{
+		"height": 35.0
+	},
+	"find_in_files":
+	{
+		"height": 93.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"session ip",
+			"createsession",
+			".ip",
+			"/auth",
+			"doqueue",
+			".activity",
+			".name",
+			"addTrack",
+			"removesong",
+			"playlistId",
+			"removeSong",
+			"Track",
+			"track",
+			"removeSong",
+			"cookie",
+			"scope",
+			"removesong",
+			"removesSon",
+			"getRemove",
+			"clear",
+			"removeSongsByIp",
+			"getactivitylog",
+			"getplaylist",
+			"playList",
+			"refreshplaylist",
+			"refreshplaylist(",
+			"refreshPl",
+			"playlistId",
+			"playlistContains",
+			"refreshPlaylist",
+			"getplaylist",
+			"playlistContains",
+			"addTrack",
+			"refreshplay",
+			"updatePlaylist",
+			"refreshPlaylist",
+			"refreshplay",
+			"addsongs",
+			"playListId",
+			"gethosts",
+			"getPlaylists",
+			"banned",
+			"banModalData",
+			"refreshplay",
+			"updateBanList",
+			"ban list",
+			"tracksList",
+			"playListId",
+			"newParty",
+			"partycode",
+			"playListId",
+			"data",
+			"(success",
+			"gettok",
+			"gettoknes",
+			"resolve",
+			"reject",
+			"resolve",
+			"reject",
+			"resolve",
+			".catch",
+			".then",
+			".catch",
+			".then",
+			"createSess",
+			"verify",
+			"Sessions.create",
+			"data",
+			"verify",
+			"query",
+			"self.",
+			"lookup",
+			"gethost",
+			"userid",
+			"gethosts",
+			"getSt",
+			"getHostspl",
+			"this.",
+			"this",
+			"looking for:",
+			"this",
+			"new Promise",
+			"verifyFre",
+			"disconnect",
+			"initsess",
+			"init",
+			"initsess",
+			"Session.",
+			"Session",
+			"engine.io",
+			"server",
+			"redirect",
+			"/host",
+			".log",
+			"name",
+			".name",
+			".title",
+			".name",
+			"refreshToken",
+			".playlist",
+			"getPlaylist",
+			".playList",
+			"trackUri",
+			"getSession",
+			"removeSongsBy",
+			"spotify.removeSongs",
+			"removeSongs",
+			"errors",
+			"getPlaylists",
+			"lookupPlaylist",
+			"$scope.playlist",
+			"verify",
+			"doQueue",
+			"createPlaylistOnSpotify",
+			".tokens =",
+			".tokens",
+			".socket =",
+			".socket",
+			"sess.socket",
+			".list",
+			"sessionIp",
+			".userId",
+			"/auth",
+			"console",
+			"cookie.",
+			".cookie",
+			"Ok",
+			"rest."
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			""
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "node/main.js",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 35971,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								35453,
+								35453
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JavaScript.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 24378.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "node/public/js/app.js",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1042,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								298,
+								298
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JavaScript.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 19.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "node/views/host_control.jade",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 7750,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								7205,
+								7205
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Jade/Syntaxes/Jade.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 48.0,
+						"translation.y": 2430.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "node/spotify.js",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 26540,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								8301,
+								8301
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JavaScript.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 4640.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "node/public/js/host.js",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5025,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								3273,
+								3273
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JavaScript.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 1746.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 25.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "",
+	"project": "broadspot.sublime-project",
+	"replace":
+	{
+		"height": 64.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 307.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 392.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 197.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
