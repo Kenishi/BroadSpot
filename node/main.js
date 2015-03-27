@@ -1,15 +1,4 @@
 /*
-	Massive scoping problems inside spotify.js
-
-	Many of the functions tend to make calls to other module functions to complete
-	their actions.
-
-	These functions are not visible from inside the Promise().
-
-	Note: need to remove self. references in spotify module. They didn't solvve the scope
-	issue.
-*/
-/*
 	Left off at:
 
 	Debug logs need to be added to confirm that the server-client connection is working
@@ -29,8 +18,6 @@
 		* Refactor/Split out routes into their seperate file. Host is quite large,
 			especially when factoring in the Socket.io commands.
 		* Fix addSong in Session so it moves songs ahead in queue if already there.
-		* Work out a method 
-
 		* Set up production logging
 		* Need to look into what happens if a song not available in a hosts region
 			is added to the queue. Does an error occur on add?
@@ -42,9 +29,6 @@
 
 		* Create session save on receiving SIGTERM (process.on('SIGTERM', func))
 		* Create session restore on restart
-		* Move doQueue into Session prototype
-		* Move playlist operations into Session prototype
-		* Move token based operations into Session prototype
 		* Move the /party search functionallity into spotify.js
 		* Refactor getPlaylists emit event => getHostsPlaylists in frontend and backend
 		* Add a connected indicator on the navbar of the host control
