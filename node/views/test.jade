@@ -1,0 +1,18 @@
+doctype html
+html
+	head
+		title="Test"
+		script(src="./js/jquery.min.js")
+		script(type="text/javascript").
+			function testIt() {
+				console.log("Posting");
+				$.ajax({
+					method : 'search',
+					url : '/party',
+					data : {
+						query : "still alive"
+					},
+				});
+			}
+	body
+		button(onclick="testIt()") Test

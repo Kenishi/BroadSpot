@@ -1,0 +1,35 @@
+doctype html
+html
+	head
+		meta(name="viewport" content="width=device-width, initial-scale=1")
+		title="Join a Party"
+		link(href="css/bootstrap.min.css" rel="stylesheet")
+		script(src="js/jquery.min.js")
+		script(src="js/bootstrap.min.js")
+		script(src="js/internal.js")
+		script(type="text/javascript").
+			var err = #{partyError};
+
+			function dislplayErrorMsg() {
+				if(err) {
+					console.log("There was an error. Try joining party again.");
+				}
+			}
+
+			window.onload = function () {
+				dislplayErrorMsg();
+			}
+	body
+		div(class="container")
+			div(class="row")
+				div(class="col-sm-4 col-sm-offset-4")
+					h2 Join a party!
+			div(class="row")
+				div(class="col-sm-4 col-sm-offset-4")
+					h3 Enter your the party code
+			div(class="row")
+				div(class="col-sm-4 col-sm-offset-4 input-group")
+					input(type="text" class="form-control" id="partyCode")
+					span(class="input-group-btn")
+						button(class="btn btn-default" onclick="joinParty()") Join
+

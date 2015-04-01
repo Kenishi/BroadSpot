@@ -1,0 +1,26 @@
+#partyCode {
+	vertical-align: center;
+}
+.result {
+	text-align: center;
+}
+
+#resultTitle {
+	text-align: center;
+}
+
+.row-centered {
+    text-align:center;
+}
+
+.row_wrap {
+	width:100%;
+}
+.list-group-item {
+	width:100%;
+}
+
+img {
+	height: 50px;
+	width: 50px;
+}

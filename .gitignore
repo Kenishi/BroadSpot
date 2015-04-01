@@ -1,0 +1,5 @@
+./cocoalib
+spotify_keys.js
+**/node_modules/**
+**/cocoalib/**
+Procfile

@@ -1,0 +1,38 @@
+body { padding-top: 70px; }
+
+kbd {
+	background-color: #7A7A7A;
+	color: white;
+}
+
+.removeBtn:hover {
+	color: red;
+}
+
+#ipaddr>button:hover {
+	background: #CF4647;
+}
+
+.modalCloseBtn {
+	color : white;
+}
+
+.adminBtn {
+	font-size: 18pt;
+}
+
+#adminmenu {
+	text-align: center;
+}
+
+#powerOn {
+	color : #08C208;
+}
+
+#powerOff {
+	color: red;
+}
+
+#changeCodeModalTxt {
+	margin-top: 0pt;
+}
